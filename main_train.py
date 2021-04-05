@@ -6,6 +6,8 @@ from DAEs import *
 import datetime
 import tensorflow.compat.v1 as v1
 import random
+import metrics
+from get_title_model import get_model
 
 # Environtment/Machine specific
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -24,6 +26,83 @@ def log_write(dir, test, log):
 
 def show_result(rprecision, ndcg, rsc):
     return "rprecision: %f ndcg: %f rsc: %f" % (rprecision, ndcg, rsc)
+
+def show_result_rprec(rprecision):
+    return "rprecision: %f" % (rprecision)
+
+def eval(reader_test, conf, sess, model, model_title):
+    # evaluation
+    ssq = 0
+    total_rprecision = 0
+    hit_by_cls_mat = []
+    cand_cls_dist_mat = []
+    encoder_grad_sqrsum_by_cls = []
+    decoder_grad_sqrsum_by_cls = []
+
+    total_hidden_sqrsum = 0
+    # total_ndcg = 0
+    # total_rsc = 0
+    test_size = len(reader_test.playlists)
+
+    while True:
+        predicted_matrix = None
+        x_positions, test_seed, test_answer, titles, x_ones = reader_test.next_batch_test()
+        if conf.mode in ['pretrain', 'dae']:
+            predicted_matrix = sess.run(model.y_pred, feed_dict={model.x_positions: x_positions,
+                                                                 model.x_ones: x_ones,
+                                                                 model.keep_prob: 1.0, model.input_keep_prob: 1.0})
+        elif conf.mode == 'title':
+            len_titles = len(titles)
+            if len_titles < conf.batch:
+                zeros = [-1] * conf.strmaxlen
+                titles = titles + [zeros] * (conf.batch - len_titles)
+            predicted_matrix = sess.run(model.y_pred, feed_dict={model.x_positions: x_positions,
+                                                                 model.x_ones: x_ones,
+                                                                 model_title.titles: titles,
+                                                                 model.keep_prob: 1.0, model_title.keep_prob: 1.0,
+                                                                 model.input_keep_prob: 1.0,
+                                                                 model.titles_use: [[1]] * conf.batch})
+        
+        # total_hidden_sqrsum += np.sum(hidden_sqrsum)
+
+        # ssq += np.sum(grad[0]**2)
+        predicted_matrix = predicted_matrix[:, :conf.n_tracks]
+   
+        for i in range(len(test_seed)):
+            rprecision, hit_by_cls, cand_cls_dist = metrics.single_eval(predicted_matrix[i], test_seed[i], test_answer[i],
+                                                     titles[i], conf.class_divpnt)
+            total_rprecision += rprecision
+            hit_by_cls_mat.append(hit_by_cls)
+            cand_cls_dist_mat.append(cand_cls_dist)
+            # print(hit_by_cls_mat)
+            # total_ndcg += ndcg
+            # total_rsc += rsc
+        if reader_test.test_idx == 0:
+            break
+
+    total_rprecision /= test_size
+    # total_hidden_sqrsum /= test_size
+
+    # hit_by_cls_mat = np.matrix(hit_by_cls_mat)
+    # hr_by_cls = hit_by_cls_mat.mean(axis=0).tolist()[0]
+
+    # cand_cls_dist_mat = np.matrix(cand_cls_dist_mat)
+    # cand_cls_dist = cand_cls_dist_mat.mean(axis=0).tolist()[0]
+
+    # encoder_grad_sqrsum_by_cls = np.matrix(encoder_grad_sqrsum_by_cls)
+    # encoder_grad_sqrsum_by_cls = encoder_grad_sqrsum_by_cls.mean(axis=0).tolist()[0]
+
+    # decoder_grad_sqrsum_by_cls = np.matrix(decoder_grad_sqrsum_by_cls)
+    # decoder_grad_sqrsum_by_cls = decoder_grad_sqrsum_by_cls.mean(axis=0).tolist()[0]
+
+    # total_ndcg /= test_size
+    # total_rsc /= test_size
+    # print(ssq)
+    
+    # return total_rprecision, hr_by_cls, cand_cls_dist, total_hidden_sqrsum, \
+    #        encoder_grad_sqrsum_by_cls, decoder_grad_sqrsum_by_cls
+
+    return total_rprecision
 
 def run(conf, only_testmode):
     if -1 in conf.firstN:
@@ -86,8 +165,10 @@ def run(conf, only_testmode):
 
         for seed_num, reader_test in readers_test.items():
             log_write(conf, "seed num: " + seed_num)
-            rprec, ndcg, rsc = eval(reader_test, conf, sess, model, model_title)
-            r = show_result(rprec, ndcg, rsc)
+            # rprec, ndcg, rsc = eval(reader_test, conf, sess, model, model_title)
+            # r = show_result(rprec, ndcg, rsc)
+            rprec = eval(reader_test, conf, sess, model, model_title)
+            r = show_result_rprec(rprec)
             log_write(conf, r)
         return
     
@@ -134,8 +215,10 @@ def run(conf, only_testmode):
                 cur_eval = 0
                 for seed_num, reader_test in readers_test.items():
                     log_write(conf, "seed num: "+seed_num)
-                    rprec, ndcg, rsc = eval(reader_test, conf, sess, model, model_title)
-                    r = show_result(rprec, ndcg, rsc)
+                    # rprec, ndcg, rsc = eval(reader_test, conf, sess, model, model_title)
+                    # r = show_result(rprec, ndcg, rsc)
+                    rprec = eval(reader_test, conf, sess, model, model_title)
+                    r = show_result_rprec(rprec)
                     log_write(conf, r)
                     if seed_num in update_seed:
                         cur_eval += rprec

@@ -126,7 +126,7 @@ if __name__ == '__main__':
         conf.set_title_conf()
         main_train.run(conf, args.testmode)
 
-    elif args.challenge:
-        conf.set_title_conf()
-        conf.set_challenge_oonf()
-        main_challenge.run(conf)
+    # elif args.challenge:
+    #     conf.set_title_conf()
+    #     conf.set_challenge_oonf()
+    #     main_challenge.run(conf)
