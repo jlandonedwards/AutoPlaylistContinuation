@@ -22,7 +22,7 @@ opt = keras.optimizers.Adam()
 count = 0 
                   
 for epoch in range(EPOCH):
-   for (x_tracks,x_artists),(y_tracks,y_artists) in training_set:
+   for x_tracks,x_artists,y_tracks,y_artists in training_set:
         with tf.GradientTape() as tape:
             y_pred = model(tf.concat([x_tracks,x_artists],axis=1), training=False)  # Forward pass
             # Compute our own loss

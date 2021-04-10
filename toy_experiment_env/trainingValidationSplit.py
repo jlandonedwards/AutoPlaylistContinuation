@@ -82,8 +82,8 @@ def gt(x,n_input_tracks):
      return  x['n_tracks'] > n_input_tracks
 
 @tf.autograph.experimental.do_not_convert      
-def val_to_tuple(x):
-    return (x["input_track_ids"],x['input_artist_ids'],x["target_track_ids"],x['target_artist_ids'],x["title_ids"])
+def val_to_list(x):
+    return [x["input_track_ids"],x['input_artist_ids'],x["target_track_ids"],x['target_artist_ids'],x["title_ids"]]
 
 @tf.autograph.experimental.do_not_convert      
 def train_to_ragged(x):
@@ -116,7 +116,7 @@ def create_val_set(tf_dataset,n_playlists,n_input_tracks,title=1,rand=0):
     else:
         selections = selections.map(no_track)
     
-    selections = selections.map(val_to_tuple)
+    selections = selections.map(val_to_list)
 
     return selections,dataset,n_playlists - 1000
 

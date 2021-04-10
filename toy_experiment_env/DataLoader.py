@@ -36,6 +36,13 @@ class DataLoader():
         validation_sets = tf.data.experimental.load(val_dir,tf.RaggedTensorSpec(tf.TensorShape([5, None]), tf.int32, 1, tf.int64))
         return validation_sets.batch(1000)
     
+    def get_challenge_sets(self,challenge_dir):
+        with open(challenge_dir) as file:
+                data = json.load(file)
+                file.close()
+        challenge_data = tf.data.Dataset.from_tensor_slices(tf.ragged.constant(data['challenge_playlists']))
+        return challenge_data.batch(1000)
+    
     
     
 
@@ -52,7 +59,7 @@ class DataLoader():
         input_tracks,input_artists,target_tracks,target_artists = tf.cond(tf.greater(x[2][0],25),
                                                 lambda: self.gt_n(x,corrupt_track),
                                                 lambda: self.le_n(x,corrupt_track))
-        return ((input_tracks,input_artists),(target_tracks,target_artists))
+        return [input_tracks,input_artists,target_tracks,target_artists]
     
 
     @tf.autograph.experimental.do_not_convert
@@ -143,13 +150,15 @@ class DataLoader():
     
 
 if __name__ == '__main__':
+    
     dataset = DataLoader('./toy_preprocessed/id_dicts')
-    gen = dataset.get_traing_set('./toy_train',100,123)
-    (x_tracks,x_artists),(y_tracks,y_artists) = next(iter(gen))
-    x = tf.concat([x_tracks,x_artists],1)
-    print("X shape:",x_tracks.shape)
-    print("Y shape",y_artists.shape)
-    print("Y tracks shape",y_tracks.shape)    
+    training_set = dataset.get_traing_set('./toy_train',50,123)
+    (x_tracks,x_artists),(y_tracks,y_artists) = next(iter(training_set))
+    validation_sets = dataset.get_validation_sets('./toy_val')
+    challenge_sets = dataset.get_challenge_sets('./toy_preprocessed/challenge_data''')
+    
+    
+    
     
     
     
