@@ -30,7 +30,7 @@ class DataLoader():
             del id_dicts,tid_2_aid
         tf.random.set_seed(seed)
         np.random.seed(seed)
-        return training_set.shuffle(10000,seed,True).map(lambda x: self.corrupt(x)).apply(tf.data.experimental.dense_to_ragged_batch(batch_size))
+        return training_set.map(lambda x: self.corrupt(x)).shuffle(1000,seed,True).apply(tf.data.experimental.dense_to_ragged_batch(batch_size,drop_remainder=True))
     
     def get_validation_sets(self,val_dir):
         validation_sets = tf.data.experimental.load(val_dir,tf.RaggedTensorSpec(tf.TensorShape([5, None]), tf.int32, 1, tf.int64))
@@ -41,6 +41,7 @@ class DataLoader():
 
     @tf.autograph.experimental.do_not_convert
     def corrupt(self,x):
+        
         
         p1 = np.random.uniform(size=1)
         if p1 > 0.5: 
@@ -92,7 +93,7 @@ class DataLoader():
         if corrupt_track:
             feat = x[0]
         else: 
-            feat = self.tid_2_aid(x[0])
+            feat = self.tid_2_aid[x[0]]
         idxs = tf.random.shuffle(tf.range(n_tracks))[:n_inputs]
         input_ids = tf.gather(feat,idxs)
         removed_elements = self.delete_tensor_by_indices(feat,idxs,n_tracks)
@@ -116,7 +117,7 @@ class DataLoader():
          if corrupt_track:
             feat = x[0]
          else: 
-            feat = self.tid_2_aid(x[0])
+            feat = self.tid_2_aid[x[0]]
         
          input_ids = feat[0:n_inputs]
          removed_elements  = feat[n_inputs:]

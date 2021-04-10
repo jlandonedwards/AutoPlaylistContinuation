@@ -133,9 +133,15 @@ if __name__ == '__main__':
     args = args.parse_args()
     
     if not os.path.isdir(args.val_dir):
-      os.mkdir(args.val_dir)
+        os.mkdir(args.val_dir)
+    else:
+        os.removedirs(args.val_dir)
+        os.mkdir(args.val_dir)
     if not os.path.isdir(args.train_dir):
-      os.mkdir(args.train_dir)
+        os.mkdir(args.train_dir)
+    else:
+        os.removedirs(args.train_dir)
+        os.mkdir(args.train_dir)
     
     tf.random.set_seed(2021)
     np.random.seed(2021)

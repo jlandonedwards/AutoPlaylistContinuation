@@ -96,6 +96,8 @@ class DataPreprocess:
         playlists = []
         for t_uris, title in zip(self.playlists_tracks, self.playlists_titles):
             tid = self.playlist_uri2id(t_uris,t_uri2id)
+            if len(tid) == 0:
+                continue
             cid = title2ids(title)
             self.playlist_len_counts[str(len(tid))] +=1
             playlists.append([tid,cid,[len(tid)]])
@@ -156,7 +158,7 @@ class DataPreprocess:
             del count_list[rm_from:]
             del valid_uri_list[rm_from:]
         uri2id = dict(zip(valid_uri_list, range(start_id, start_id + len(valid_uri_list))))
-        return uri_list, count_list, uri2id
+        return valid_uri_list, count_list, uri2id
     
     @staticmethod
     def playlist_uri2id(playlist_uris,uri2id):

@@ -54,13 +54,13 @@ def ragged_to_dense(tensor):
 #loss_tracker = keras.metrics.Mean(name="loss")
 
 class DAE(tf.keras.Model):
-    def __init__(self,config=None):
+    def __init__(self,batch_size):
         super(DAE, self).__init__()
         self.n_ids = 81616
         self.n_track_ids = 61740
-        self.batch_size = 50
+        self.batch_size = batch_size
         self.emb = Embedding()
-        self.Metrics = Metrics(self.n_ids,self.n_track_ids)
+        self.Metrics = Metrics(self.n_ids,self.n_track_ids,self.batch_size)
 
     
     def call(self, ids,training=False):
