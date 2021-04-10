@@ -62,8 +62,7 @@ class DataPreprocess:
         """
         self.playlists_titles = list()
         self.playlists_tracks = list()
-        self.playlists_artists = list()
-        self.track2artists = dict()
+        self.t_uri_2_a_uri = dict()
         self.track_counts = collections.Counter()
         self.artist_counts = collections.Counter()
         self.playlist_len_counts = collections.Counter()
@@ -78,7 +77,7 @@ class DataPreprocess:
         
         # Map tracks all unqiue tracks uris to interger ids
         o_track_counts = collections.OrderedDict(self.track_counts.most_common())
-        tracks,track_counts,t_uri2id = self.create_ids(o_track_counts, min_track, 1)
+        tracks,track_counts,t_uri2id = self.create_ids(o_track_counts, min_track, 0)
         del o_track_counts
         # Map all unqiue artists uris to ids
         del self.artist_counts[VARIOUS_ARTISTS_URI]
@@ -86,49 +85,65 @@ class DataPreprocess:
         artists,artist_counts,a_uri2id = self.create_ids(o_artist_counts, min_artist, len(t_uri2id))
         del o_artist_counts
         
+        tid_2_aid = []
+        for t_uri in t_uri2id.keys():
+            a_uri = self.t_uri_2_a_uri[t_uri]
+            a_id =  a_uri2id.get(a_uri,-1)
+            if a_id == -1: continue
+            tid_2_aid.append((t_uri2id[t_uri] , a_id))
+        
         # Convert artists and tracks uris to coressponding ids and titles to seperate set of character ids
         playlists = []
-        for t_uris, a_uris, title in zip(self.playlists_tracks, self.playlists_artists, self.playlists_titles):
+        for t_uris, title in zip(self.playlists_tracks, self.playlists_titles):
             tid = self.playlist_uri2id(t_uris,t_uri2id)
-            aid = self.playlist_uri2id(a_uris,a_uri2id)
             cid = title2ids(title)
             self.playlist_len_counts[str(len(tid))] +=1
-            playlists.append([tid,aid,cid,[len(tid)],[len(aid)]])
+            playlists.append([tid,cid,[len(tid)]])
         
         data = dict()
-        data['max_title_len'] = MAX_TITLE_LEN
-        data['char_vocab_size'] = len(char2id) + 1
-        data['trkArt_vocab_size'] = len(t_uri2id) + len(a_uri2id) + 1
-        data['t_uri2id'] = t_uri2id
-        data['a_uri2id'] = a_uri2id
+        id_dicts = dict()
+        data_properties = dict()
+        data_properties['max_title_len'] = MAX_TITLE_LEN
+        data_properties['char_vocab_size'] = len(char2id) + 1
+        data_properties['track_vocab_size'] = len(t_uri2id)
+        data_properties['artist_vocab_size'] = len(a_uri2id)           
+        data_properties['track_artist_vocab_size'] = len(t_uri2id) + len(a_uri2id)
+        id_dicts['t_uri2id'] = t_uri2id
+        id_dicts['a_uri2id'] = a_uri2id
+        id_dicts['tid_2_aid'] = tid_2_aid
         data['playlists'] = playlists
-        data['playlists_counts'] = self.playlist_len_counts.most_common()
+        #data['playlists_counts'] = self.playlist_len_counts.most_common()
         
         if not os.path.isdir(out_path):
             os.mkdir(out_path)
         with open(out_path+'/'+'data', 'w') as file:
             json.dump(data,file,indent="\t")
+            file.close()
+        with open(out_path+'/'+'id_dicts', 'w') as file:
+            json.dump(id_dicts,file,indent="\t")
+            file.close()
+        with open(out_path+'/'+'data_properties', 'w') as file:
+            json.dump(data_properties,file,indent="\t")
+            file.close()
         
         print("num playlists: %d,tracks>=min_count: %d, artists>=min_count: %d,trkArt_vocabSize: %d" %
-              (len(playlists), len(t_uri2id),len(a_uri2id),data['trkArt_vocab_size']))
+              (len(playlists), len(t_uri2id),len(a_uri2id),data_properties['track_artist_vocab_size']))
         #print(self.playlist_len_counts.most_common())
         
     def process_playlist(self,playlist):
         title = string_normalize(playlist['name'])
         self.playlists_titles.append(title)
         tracks = []
-        artists = []
         for track in playlist['tracks']:
             t_uri = track['track_uri'].split(':')[2]
             a_uri = track['artist_uri'].split(':')[2]
-            if t_uri not in self.track2artists:
-                self.track2artists[t_uri] = a_uri
+            if t_uri not in self.t_uri_2_a_uri:
+                self.t_uri_2_a_uri[t_uri] = a_uri
             tracks.append(t_uri)
-            artists.append(a_uri)
             self.track_counts[t_uri] += 1
             self.artist_counts[a_uri] += 1  
         self.playlists_tracks.append(tracks)
-        self.playlists_artists.append(artists)
+    
         
     
     @staticmethod   
