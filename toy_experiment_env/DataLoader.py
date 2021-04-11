@@ -33,8 +33,13 @@ class DataLoader():
         return training_set.map(lambda x: self.corrupt(x)).shuffle(1000,seed,True).apply(tf.data.experimental.dense_to_ragged_batch(batch_size,drop_remainder=True))
     
     def get_validation_sets(self,val_dir):
-        validation_sets = tf.data.experimental.load(val_dir,tf.RaggedTensorSpec(tf.TensorShape([5, None]), tf.int32, 1, tf.int64))
-        return validation_sets.batch(1000)
+        validation_sets = tf.data.experimental.load(val_dir,
+                                                    (tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
+                                                     tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
+                                                     tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
+                                                     tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
+                                                     tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None)))
+        return validation_sets.apply(tf.data.experimental.dense_to_ragged_batch(1000))
     
     def get_challenge_sets(self,challenge_dir):
         with open(challenge_dir) as file:
@@ -59,7 +64,7 @@ class DataLoader():
         input_tracks,input_artists,target_tracks,target_artists = tf.cond(tf.greater(x[2][0],25),
                                                 lambda: self.gt_n(x,corrupt_track),
                                                 lambda: self.le_n(x,corrupt_track))
-        return [input_tracks,input_artists,target_tracks,target_artists]
+        return (input_tracks,input_artists,target_tracks,target_artists)
     
 
     @tf.autograph.experimental.do_not_convert

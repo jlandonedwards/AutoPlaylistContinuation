@@ -59,6 +59,7 @@ class DAE(tf.keras.Model):
         self.n_ids = 81616
         self.n_track_ids = 61740
         self.batch_size = batch_size
+        self.val_batch_size = 1000
         self.emb = Embedding()
         self.Metrics = Metrics(self.n_ids,self.n_track_ids,self.batch_size)
 
@@ -71,11 +72,11 @@ class DAE(tf.keras.Model):
         return y_pred
     
     def loss(self,y_tracks,y_artists,y_pred):
-        y_true = tf.cast(tf.concat([y_tracks,y_artists],1),tf.float32).to_tensor(default_value=0,shape=(self.batch_size,self.n_ids))
+        y_true = tf.cast(tf.concat([y_tracks,y_artists],1),tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_ids))
         return tf.reduce_mean(-K.sum(y_true*tf.math.log(y_pred+1e-10) + (1-y_true)*tf.math.log(1 -(y_pred+1e-10)),axis=1),axis=0)
         
-    def get_reccomendations(self,x_tracks,y_tracks,y_artists,y_pred):
-        cand_ids = self._zero_by_ids(y_pred,x_tracks)
+    def get_reccomendations(self,x_tracks,y_tracks,y_artists,y_pred,is_train=True):
+        cand_ids = self._zero_by_ids(y_pred,x_tracks,is_train)
         cand_track = cand_ids[:,0:self.n_track_ids]
         cand_artist = cand_ids[:,self.n_track_ids:]
         _,rec_tracks = tf.math.top_k(cand_track,k=500)
@@ -83,8 +84,10 @@ class DAE(tf.keras.Model):
         rec_artists += self.n_track_ids
         return rec_tracks,rec_artists
     
-    def _zero_by_ids(self,tensor,ids):
-        ids_2d = tf.stack([ids,tf.ones_like(ids)*tf.expand_dims(tf.range(ids.shape[0]),1)],2)
+    def _zero_by_ids(self,tensor,ids,is_train):
+        if is_train: nrows = self.batch_size
+        else: nrows = self.val_batch_size 
+        ids_2d = tf.stack([ids,tf.ones_like(ids)*tf.expand_dims(tf.range(nrows),1)],2)
         zeros = tf.zeros_like(ids,dtype=tf.float32)
         return tf.tensor_scatter_nd_update(tensor,ids_2d.flat_values,zeros.flat_values)
     
