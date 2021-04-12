@@ -39,12 +39,6 @@ class Embedding(tf.keras.layers.Layer):
         x = keras.backend.sum(x,1)
         return x
     
-   
-
-   
-        
-    
-
 #loss_tracker = keras.metrics.Mean(name="loss")
 
 class DAE(tf.keras.Model):
@@ -110,18 +104,28 @@ class DAE(tf.keras.Model):
         r_precision,ndcg,rec_clicks = self.Metrics.calculate_metrics(rec_tracks,rec_artists,y_tracks,y_artists)
         return loss,r_precision,ndcg,rec_clicks
     
-    def train(self,training_set,validation_sets,n_epochs,train_batch_size,val_batch_size):
+    def train(self,training_set,validation_sets,
+              n_epochs,train_batch_size,val_batch_size,
+              resume_path,resume=0,):
         self.train_batch_size = train_batch_size
         self.val_batch_size = val_batch_size
+        n_batches = len(training_set)
         n_val_batches = 1000//val_batch_size
-        count = 0                  
-        for epoch in range(n_epochs):
+       
+        training_set = iter(training_set.repeat(n_epochs))
+        
+        checkpoint = tf.train.Checkpoint(model=self,training_set=training_set,curr_epoch=tf.Variable(0))
+        manager = tf.train.CheckpointManager(checkpoint, resume_path , max_to_keep=1)
+        if resume: checkpoint.restore(manager.latest_checkpoint)
+        curr_epoch = checkpoint.curr_epoch.numpy()
+        
+        for epoch in range(curr_epoch,n_epochs):
            print("EPOCH: ",epoch)
-           for batch in training_set:
+           for batch_step in range(n_batches):
+               batch = next(training_set)
                loss,r_precision,ndcg,rec_clicks = self.train_step(batch)
-               print("[Batch #{0}],loss:{1:g},R-precison:{2:g},NDCG:{3:.3f},Rec-Clicks:{4:g}".format(count,loss,r_precision,ndcg,rec_clicks))
+               print("[Batch #{0}],loss:{1:g},R-precison:{2:g},NDCG:{3:.3f},Rec-Clicks:{4:g}".format(batch_step,loss,r_precision,ndcg,rec_clicks))
                self.Metrics.update_metrics("train_batch",tf.stack([loss,r_precision,ndcg,rec_clicks],0))
-               count += 1
                
            count = 0     
            for batch in validation_sets:
@@ -131,7 +135,9 @@ class DAE(tf.keras.Model):
                 if count == n_val_batches:
                     self.Metrics.update_metrics("val_set",tf.stack([loss,r_precision,ndcg,rec_clicks],0))
                     count = 0
-           metrics_train,metrics_val = self.Metrics.update_metrics("epoch") 
+           metrics_train,metrics_val = self.Metrics.update_metrics("epoch")
+           checkpoint.curr_epoch.assign_add(1)
+           manager.save()
            loss,r_precision,ndcg,rec_clicks = metrics_train
            print("AVG Train: loss:{0:g},R-precison:{1:g},NDCG:{2:g},Rec-Clicks:{3:g}".format(loss,r_precision,ndcg,rec_clicks))
            loss,r_precision,ndcg,rec_clicks = metrics_val

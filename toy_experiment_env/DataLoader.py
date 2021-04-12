@@ -160,7 +160,7 @@ if __name__ == '__main__':
     training_set = dataset.get_traing_set('./toy_train',50,123)
     (x_tracks,x_artists),(y_tracks,y_artists) = next(iter(training_set))
     validation_sets = dataset.get_validation_sets('./toy_val')
-    challenge_sets = dataset.get_challenge_sets('./toy_preprocessed/challenge_data''')
+    challenge_sets = dataset.get_challenge_sets('./toy_preprocessed/challenge_data')
     
     
     
