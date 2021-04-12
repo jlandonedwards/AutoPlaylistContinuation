@@ -11,7 +11,6 @@ from tensorflow import keras
 from tensorflow.keras import backend as K
 from Metrics import Metrics
 
-
 class Embedding(tf.keras.layers.Layer):
     def __init__(self,n_ids,embedding_dim=32):
         super(Embedding, self).__init__()
@@ -106,6 +105,83 @@ class Model(tf.keras.Model):
         zeros = tf.zeros_like(ids,dtype=tf.float32)
         return tf.tensor_scatter_nd_update(tensor,ids_2d.flat_values,zeros.flat_values)
     
+    # TODO this processing can be made redundant by DataProcessing challenge batches same way as Train batches
+    def process_challenge_batch_for_prediction(self, current_batch):
+        # tracks
+        list_of_track_tensors = [row[0] for row in current_batch]
+        vals1 = tf.concat(list_of_track_tensors, axis = 0)
+        lens1 = tf.stack([tf.shape(t, out_type = tf.int64)[0] for t in list_of_track_tensors])
+        x_tracks = tf.RaggedTensor.from_row_lengths(vals1, lens1)
+        del list_of_track_tensors, vals1, lens1
+
+        # artists
+        list_of_artist_tensors = [row[1] for row in current_batch]
+        vals2 = tf.concat(list_of_artist_tensors, axis = 0)
+        lens2 = tf.stack([tf.shape(t, out_type = tf.int64)[0] for t in list_of_artist_tensors])
+        x_artists = tf.RaggedTensor.from_row_lengths(vals2, lens2)
+        del list_of_artist_tensors, vals2, lens2
+
+        # titles
+        list_of_title_tensors = [row[2] for row in current_batch]
+        vals3 = tf.concat(list_of_title_tensors, axis = 0)
+        lens3 = tf.stack([tf.shape(t, out_type = tf.int64)[0] for t in list_of_title_tensors])
+        x_titles = tf.RaggedTensor.from_row_lengths(vals3, lens3)
+        del list_of_title_tensors, vals3, lens3
+
+        # playlist IDs
+        list_of_pids = [row[3].numpy()[0] for row in current_batch]
+
+        return x_tracks, x_artists, x_titles, list_of_pids
+    
+    # TODO optimize to speed up/parallelize
+    # - Can use Tensor of strings with index as keys to replace tid_2_uri_dict
+    # - Can use Tensor dict
+    def get_challenge_submission(self, pids, rec_tracks, tid_2_uri_dict):
+        
+        def convert_tid_2_uri(tracks_tensor):
+            return(tf.map_fn(fn = lambda x: tid_2_uri_dict[str(x.numpy())], elems = tracks_tensor, fn_output_signature = tf.string))
+        
+        submission_tracks = tf.map_fn(fn = lambda x: convert_tid_2_uri(x), elems = rec_tracks, fn_output_signature = tf.TensorSpec(rec_tracks[0].shape, tf.string))
+        submissions = list(map(lambda x: [pids[x]] + ["spotify:track:" + a.decode("utf-8") for a in list(submission_tracks.numpy()[x])], range(0,len(pids))))
+
+        return submissions
+    
+    def write_submission_to_file(self, submissions, path_to_file):
+        import csv
+        
+        with open(path_to_file, 'w', newline = '') as outFile:
+            wr = csv.writer(outFile, quoting = csv.QUOTE_NONE)
+            wr.writerow(['team_info'] + ['my awesome team name'] + ['my_awesome_team@email.com'])
+            wr.writerows(submissions)
+            outFile.close()
+    
+    def generate_submissions(self, save_dir, challenge_data):
+        import json
+        import DataLoader
+
+        with open(challenge_data) as cfile:
+            cdata = json.load(cfile)
+            cfile.close()
+            tid_2_uri_dict = cdata['tid_2_uri']
+            del(cdata)
+        
+        dataset = DataLoader('./toy_preprocessed/id_dicts')
+        challenge_sets = dataset.get_challenge_sets('./toy_preprocessed/challenge_data')
+        batchCtr = 0
+
+        for current_batch in challenge_sets:
+            print(f"Batch number = {batchCtr}")
+            batchCtr = batchCtr + 1
+            x_tracks, x_artists, x_titles, pids = process_challenge_batch_for_prediction(current_batch = current_batch)            
+            y_pred = self(tf.concat([x_tracks, x_artists], axis = 1), x_titles, training=False)
+            rec_tracks,rec_artists = model.get_reccomendations(x_tracks = x_tracks, y_tracks = None, y_artists = None, y_pred = y_pred)       
+            
+            # Takes about 5 minutes (see get_challenge_submission() definition)
+            submissions = submissions + get_challenge_submission(pids, rec_tracks, tid_2_uri_dict)
+
+        print("Submissions generated, outputting to file")
+        write_submission_to_file(submissions, save_dir)
+        print("Output complete")
     
     
     #@tf.function

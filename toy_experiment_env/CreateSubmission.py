@@ -1,9 +1,15 @@
+##
+# NOTE: File is now defunct as functionality has been moved to Model.py
+##
+
 import tensorflow as tf
 import json
 import csv
 import time
 
 # TODO optimize to speed up/parallelize
+# - Can use Tensor of strings with index as keys to replace tid_2_uri_dict
+# - Can use Tensor dict
 def get_challenge_submission(pids, rec_tracks, tid_2_uri_dict):
     
     def convert_tid_2_uri(tracks_tensor):
