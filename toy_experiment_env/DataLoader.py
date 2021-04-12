@@ -32,14 +32,14 @@ class DataLoader():
         np.random.seed(seed)
         return training_set.map(lambda x: self.corrupt(x)).shuffle(1000,seed,True).apply(tf.data.experimental.dense_to_ragged_batch(batch_size,drop_remainder=True))
     
-    def get_validation_sets(self,val_dir):
+    def get_validation_sets(self,val_dir,batch_size):
         validation_sets = tf.data.experimental.load(val_dir,
                                                     (tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
                                                      tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
                                                      tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
                                                      tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
                                                      tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None)))
-        return validation_sets.apply(tf.data.experimental.dense_to_ragged_batch(1000))
+        return validation_sets.apply(tf.data.experimental.dense_to_ragged_batch(batch_size))
     
     def get_challenge_sets(self,challenge_dir):
         with open(challenge_dir) as file:

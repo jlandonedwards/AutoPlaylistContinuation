@@ -10,48 +10,44 @@ Created on Tuesday April 6th 2021
 import tensorflow as tf
 
 class Metrics():
-    def __init__(self,n_ids,n_track_ids,batch_size):
-        self.batch_size = batch_size
+    def __init__(self,n_ids,n_track_ids,):
         self.n_ids = n_ids
-        self.n_track_ids = n_track_ids
-        self.training = []
-        self.curr_val_set = []
-        self.val_sets = []
-        self.epoch = [[],[]]
-    
-    
-    def collect_metrics(self,mode='train',*args):
+        self.n_track_ids = n_track_ids    
+        self.train_batch_metrics = []
+        self.epochs_train_metrics = []
+        self.val_batch_metrics = []
+        self.val_sets_metrics = []
+        self.epochs_val_metrics = []
+        
+        
+    def update_metrics(self,mode='train',metrics=None):
         
         if mode == 'epoch':
-            epoch_train = tf.reduce_mean(self.training,0)
-            self.epoch[0].append(epoch_train)
-            self.epoch[1].append(tf.stack(self.val_sets,0))
-            epoch_val = tf.reduce_mean(self.val_sets,0)
-            self.training = []
-            self.curr_val_set = []
-            self.val_sets = []
+            epoch_train = tf.reduce_mean(tf.stack(self.train_batch_metrics,0),0)
+            self.epochs_train_metrics.append(epoch_train)
+            self.train_batch_idx = 0
+            val_sets_metrics = tf.stack(self.val_sets_metrics,0)
+            self.epochs_val_metrics.append(val_sets_metrics)
+            epoch_val = tf.reduce_mean(val_sets_metrics,0)
+            self.train_batch_metrics = []
+            self.val_sets_metrics = []
             return epoch_train,epoch_val
         
-        elif mode == 'collect_val':
-                self.val_sets.append(tf.reduce_mean(self.curr_val_set,0))
-                self.curr_val_set = []
-        
+        elif mode == 'val_set':
+                self.val_sets_metrics.append(tf.reduce_mean(tf.stack(self.val_batch_metrics,0),0))
+                self.val_batch_metrics = []
+                
         else:
-            loss,rec_tracks,rec_artists,y_tracks,y_artists = args
-            r_precision,ndcg,rec_clicks = self.calculate_metrics(rec_tracks,rec_artists,y_tracks,y_artists)
-            if mode == 'train':
-                self.training.append(tf.stack([loss,r_precision,ndcg,rec_clicks],0))
-                return r_precision,ndcg,rec_clicks
             
-            elif mode == 'val':
-                self.curr_val_set.append(tf.stack([loss,r_precision,ndcg,rec_clicks],0))
+            if mode == 'train_batch':
+                self.train_batch_metrics.append(metrics)
+                
             
+            elif mode == 'val_batch':
+                self.val_batch_metrics.append(metrics)
+                
+                
             
-            
-        
-            
-        
-    
     def calculate_metrics(self,rec_tracks,rec_artists,y_tracks,y_artists):
         
         # R-precision

@@ -41,27 +41,19 @@ class Embedding(tf.keras.layers.Layer):
     
    
 
-def ragged_to_dense(tensor):
-        idxs = tf.reshape(tensor,(-1,1))
-        dense = tf.scatter_nd(indices=idxs,updates=tf.ones_like(tensor,dtype="float32"),shape=[81616])
-        # sparse = tf.sparse.from_dense(dense)
-        return dense      
+   
         
     
-
-
 
 #loss_tracker = keras.metrics.Mean(name="loss")
 
 class DAE(tf.keras.Model):
-    def __init__(self,batch_size):
+    def __init__(self,n_ids,n_track_ids):
         super(DAE, self).__init__()
-        self.n_ids = 81616
-        self.n_track_ids = 61740
-        self.batch_size = batch_size
-        self.val_batch_size = 1000
+        self.n_ids = n_ids
+        self.n_track_ids = n_track_ids
         self.emb = Embedding()
-        self.Metrics = Metrics(self.n_ids,self.n_track_ids,self.batch_size)
+        self.Metrics = Metrics(n_ids,n_track_ids)
 
     
     def call(self, ids,training=False):
@@ -71,9 +63,10 @@ class DAE(tf.keras.Model):
         y_pred = keras.activations.sigmoid(x)
         return y_pred
     
+    
     def loss(self,y_tracks,y_artists,y_pred):
         y_true = tf.cast(tf.concat([y_tracks,y_artists],1),tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_ids))
-        return tf.reduce_mean(-K.sum(y_true*tf.math.log(y_pred+1e-10) + (1-y_true)*tf.math.log(1 -(y_pred+1e-10)),axis=1),axis=0)
+        return tf.reduce_mean(-tf.reduce_sum(y_true*tf.math.log(y_pred+1e-10) + (1-y_true)*tf.math.log(1 -(y_pred+1e-10)),axis=1),axis=0)
         
     def get_reccomendations(self,x_tracks,y_tracks,y_artists,y_pred,is_train=True):
         cand_ids = self._zero_by_ids(y_pred,x_tracks,is_train)
@@ -85,9 +78,9 @@ class DAE(tf.keras.Model):
         return rec_tracks,rec_artists
     
     def _zero_by_ids(self,tensor,ids,is_train):
-        if is_train: nrows = self.batch_size
+        if is_train: nrows = self.train_batch_size
         else: nrows = self.val_batch_size 
-        ids_2d = tf.stack([ids,tf.ones_like(ids)*tf.expand_dims(tf.range(nrows),1)],2)
+        ids_2d = tf.stack([tf.ones_like(ids)*tf.expand_dims(tf.range(nrows),1),ids],2)
         zeros = tf.zeros_like(ids,dtype=tf.float32)
         return tf.tensor_scatter_nd_update(tensor,ids_2d.flat_values,zeros.flat_values)
     
@@ -95,28 +88,61 @@ class DAE(tf.keras.Model):
     
     @tf.function
     def train_step(self, data):
-        
-        x, y = data
-        y,y_tracks = y
-        y = keras.backend.map_fn(ragged_to_dense,y,dtype=tf.float32)
-        
-        
+        x_tracks,x_artists,y_tracks,y_artists = data
         with tf.GradientTape() as tape:
-            y_pred = self(x, training=True)  # Forward pass
-            
+            y_pred = self(tf.concat([x_tracks,x_artists],axis=1), training=True)  # Forward pass
             # Compute our own loss
-            loss = self.loss(y,y_pred)
-            #loss = K.mean(-K.sum(tf.sparse.to_dense(y)*K.log(y_pred+1e-10)+(1-tf.sparse.to_dense(y))*K.log(1 - (y_pred+1e-10)),axis=1))
-        # Compute gradients
+            loss = self.loss(y_tracks,y_artists,y_pred)
+            # Compute gradients
             trainable_vars = self.trainable_variables
             gradients = tape.gradient(loss, trainable_vars)
-
-        # Update weights
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+        rec_tracks,rec_artists = self.get_reccomendations(x_tracks,y_tracks,y_artists,y_pred)
+        r_precision,ndcg,rec_clicks = self.Metrics.calculate_metrics(rec_tracks,rec_artists,y_tracks,y_artists)
+        return loss,r_precision,ndcg,rec_clicks
+    
+    @tf.function
+    def val_step(self,data):
+        x_tracks,x_artists,y_tracks,y_artists,_ = data
+        y_pred = self(tf.concat([x_tracks,x_artists],axis=1), training=False)
+        loss = self.loss(y_tracks,y_artists,y_pred)
+        rec_tracks,rec_artists = self.get_reccomendations(x_tracks,y_tracks,y_artists,y_pred,is_train=False)
+        r_precision,ndcg,rec_clicks = self.Metrics.calculate_metrics(rec_tracks,rec_artists,y_tracks,y_artists)
+        return loss,r_precision,ndcg,rec_clicks
+    
+    def train(self,training_set,validation_sets,n_epochs,train_batch_size,val_batch_size):
+        self.train_batch_size = train_batch_size
+        self.val_batch_size = val_batch_size
+        n_val_batches = 1000//val_batch_size
+        count = 0                  
+        for epoch in range(n_epochs):
+           print("EPOCH: ",epoch)
+           for batch in training_set:
+               loss,r_precision,ndcg,rec_clicks = self.train_step(batch)
+               print("[Batch #{0}],loss:{1:g},R-precison:{2:g},NDCG:{3:.3f},Rec-Clicks:{4:g}".format(count,loss,r_precision,ndcg,rec_clicks))
+               self.Metrics.update_metrics("train_batch",tf.stack([loss,r_precision,ndcg,rec_clicks],0))
+               count += 1
+               
+           count = 0     
+           for batch in validation_sets:
+                loss,r_precision,ndcg,rec_clicks = self.val_step(batch)
+                self.Metrics.update_metrics("val_batch",tf.stack([loss,r_precision,ndcg,rec_clicks],0))
+                count += 1
+                if count == n_val_batches:
+                    self.Metrics.update_metrics("val_set",tf.stack([loss,r_precision,ndcg,rec_clicks],0))
+                    count = 0
+           metrics_train,metrics_val = self.Metrics.update_metrics("epoch") 
+           loss,r_precision,ndcg,rec_clicks = metrics_train
+           print("AVG Train: loss:{0:g},R-precison:{1:g},NDCG:{2:g},Rec-Clicks:{3:g}".format(loss,r_precision,ndcg,rec_clicks))
+           loss,r_precision,ndcg,rec_clicks = metrics_val
+           print("AVGe Val: loss:{0:g},R-precison:{1:g},NDCG:{2:g},Rec-Clicks:{3:g}\n".format(loss,r_precision,ndcg,rec_clicks))
         
-        # Compute our own metrics
-        #loss_tracker.update_state(loss)
-        return {"loss": loss}
+    
+    
+   
+        
+        
+    
 
 if __name__ ==  "__main__":
     from TrainingDataLoader import *
