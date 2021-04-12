@@ -33,7 +33,7 @@ def title2ids(title):
         if cid != -1:
             ids.append(cid)
             if len(ids) == MAX_TITLE_LEN : break
-    ids = ids + [0]*(MAX_TITLE_LEN - len(ids))
+
     return ids
 
 

@@ -64,7 +64,7 @@ class DataLoader():
         input_tracks,input_artists,target_tracks,target_artists = tf.cond(tf.greater(x[2][0],25),
                                                 lambda: self.gt_n(x,corrupt_track),
                                                 lambda: self.le_n(x,corrupt_track))
-        return (input_tracks,input_artists,target_tracks,target_artists)
+        return (input_tracks,input_artists,x[1],target_tracks,target_artists)
     
 
     @tf.autograph.experimental.do_not_convert
@@ -158,8 +158,8 @@ if __name__ == '__main__':
     
     dataset = DataLoader('./toy_preprocessed/id_dicts')
     training_set = dataset.get_traing_set('./toy_train',50,123)
-    (x_tracks,x_artists),(y_tracks,y_artists) = next(iter(training_set))
-    validation_sets = dataset.get_validation_sets('./toy_val')
+    x_tracks,x_artists,x_titles,y_tracks,y_artists = next(iter(training_set))
+    validation_sets = dataset.get_validation_sets('./toy_val',50)
     challenge_sets = dataset.get_challenge_sets('./toy_preprocessed/challenge_data')
     
     

@@ -83,7 +83,7 @@ def gt(x,n_input_tracks):
 
 @tf.autograph.experimental.do_not_convert      
 def val_to_list(x):
-    return (x["input_track_ids"],x['input_artist_ids'],x["target_track_ids"],x['target_artist_ids'],x["title_ids"])
+    return (x["input_track_ids"],x['input_artist_ids'],x["title_ids"],x["target_track_ids"],x['target_artist_ids'])
 
 @tf.autograph.experimental.do_not_convert      
 def train_to_ragged(x):

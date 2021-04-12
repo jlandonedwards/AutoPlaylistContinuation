@@ -10,7 +10,7 @@ import tensorflow as tf
 import numpy as np
 import tensorflow.keras as keras
 from DataLoader import DataLoader
-from wip_DAE import DAE
+from Model import Model
 import argparse
 import time
 import sys
@@ -40,7 +40,7 @@ if __name__=='__main__':
     challenge_set = dataset.get_challenge_sets(args.challenge_data_dir,train_batch_size,123)
    
     opt = keras.optimizers.Adam()
-    model = DAE(n_ids,n_track_ids)
+    model = Model(n_ids,n_track_ids)
     model.optimizer = opt
     
     checkpoint = tf.train.Checkpoint(model=model)
