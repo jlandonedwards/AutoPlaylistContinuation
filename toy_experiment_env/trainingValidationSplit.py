@@ -11,6 +11,7 @@ import numpy as np
 import json
 import argparse
 import os
+import time
 
 HAS_TITLE = [1,1,0,1,1,1,1,1,1]
 N_TRACKS = [0,5,5,10,25,25,100,100,1]
@@ -95,14 +96,14 @@ def train_to_ragged(x):
 
 def create_val_set(tf_dataset,n_playlists,n_input_tracks,title=1,rand=0):
 
-    if n_input_tracks > 1:
+    if n_input_tracks > 0:
         sample_excl = tf_dataset.filter(lambda x: le(x,n_input_tracks))
         sample_cand = tf_dataset.filter(lambda x: gt(x,n_input_tracks)).shuffle(n_playlists,seed=2021,reshuffle_each_iteration=False)
         selections = sample_cand.take(1000)
         unselected = sample_cand.skip(1000)
         dataset = sample_excl.concatenate(unselected)
     else:
-        sample_cand = tf_dataset.shuffle(n_playlists,reshuffle_each_iteration=False)
+        sample_cand = tf_dataset.shuffle(1000,reshuffle_each_iteration=False)
         selections = sample_cand.take(1000)
         dataset = sample_cand.skip(1000)
     
@@ -124,6 +125,7 @@ def create_val_set(tf_dataset,n_playlists,n_input_tracks,title=1,rand=0):
   
         
 if __name__ == '__main__':
+    start_time = time.time()
     args = argparse.ArgumentParser(description="args")
     args.add_argument('--data_dir', type=str, default='./toy_preprocessed/data', help="directory where preprocessed data is stored")
     args.add_argument('--val_dir', type=str, default='./toy_val', help="directory where to witre validation sets to")
@@ -177,6 +179,7 @@ if __name__ == '__main__':
     # Full Uncorrupted Training Dataset
     train_set = train_set.map(train_to_ragged)
     tf.data.experimental.save(train_set, args.train_dir)
+    print("---completed in %s seconds ---" % round((time.time() - start_time),2))
     
 '''
 To Do:

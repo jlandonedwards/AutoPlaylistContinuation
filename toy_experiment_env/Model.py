@@ -179,7 +179,7 @@ class Model(tf.keras.Model):
             rec_tracks,rec_artists = self.get_reccomendations(x_tracks = x_tracks, y_tracks = None, y_artists = None, y_pred = y_pred)       
             
             # Takes about 5 minutes (see get_challenge_submission() definition)
-            submissions = submissions + get_challenge_submission(pids, rec_tracks, tid_2_uri_dict)
+            submissions = submissions + self.get_challenge_submission(pids, rec_tracks, tid_2_uri_dict)
 
         print("Submissions generated, outputting to file")
         self.write_submission_to_file(submissions, save_dir)
@@ -235,7 +235,7 @@ class Model(tf.keras.Model):
         
         pb_train_metrics_names = ['batch_loss','batch_R-Prec']
        
-        progress_bar = tf.keras.utils.Progbar(self.train_batch_size*n_batches, stateful_metrics= pb_train_metrics_names)
+        progress_bar = tf.keras.utils.Progbar(self.train_batch_size*n_batches, stateful_metrics= pb_train_metrics_names, width=50,unit_name="batch")
         
         for epoch in range(curr_epoch,n_epochs):
            print("\nepoch {}/{}".format(epoch+1,n_epochs))
@@ -243,7 +243,7 @@ class Model(tf.keras.Model):
            for batch_step in range(n_batches):
                batch = next(training_set)
                loss,r_precision,ndcg,rec_clicks = self.train_step(batch)
-               progress_bar.update(batch_step*(train_batch_size+1),list(zip(pb_train_metrics_names,[np.round(loss,3),np.round(r_precision,3)])))
+               progress_bar.update((batch_step+1)*train_batch_size,list(zip(pb_train_metrics_names,[loss,np.round(r_precision,3)])))
                #print("[Batch #{0}],loss:{1:g},R-precison:{2:g},NDCG:{3:.3f},Rec-Clicks:{4:g}".format(batch_step,loss,r_precision,ndcg,rec_clicks))
                self.Metrics.update_metrics("train_batch",tf.stack([loss,r_precision,ndcg,rec_clicks],0))
                
@@ -262,9 +262,9 @@ class Model(tf.keras.Model):
           
    
            loss,r_precision,ndcg,rec_clicks = metrics_train
-           print("\nAVG Train: loss:{0:g},R-precison:{1:g},NDCG:{2:g},Rec-Clicks:{3:g}".format(loss,r_precision,ndcg,rec_clicks))
+           print("\nAVG Train:\n   loss:{0:g}\n   R-precison:{1:g}\n   NDCG:{2:g}\n   Rec-Clicks:{3:g}".format(loss,r_precision,ndcg,rec_clicks))
            loss,r_precision,ndcg,rec_clicks  = metrics_val
-           print("AVG Val: loss:{0:g},R-precison:{1:g},NDCG:{2:g},Rec-Clicks:{3:g}\n".format(loss,r_precision,ndcg,rec_clicks))
+           print("AVG Val:\n   loss:{0:g}\n   R-precison:{1:g}\n   NDCG:{2:g}\n   Rec-Clicks:{3:g}\n".format(loss,r_precision,ndcg,rec_clicks))
            
            
            
@@ -280,5 +280,5 @@ class Model(tf.keras.Model):
            np.save(save_train_path + "/most_recent/train_metrics",self.Metrics.epochs_train_metrics)
            np.save(save_train_path + "/most_recent/val_metrics",self.Metrics.epochs_val_metrics)
            
-           print("Epoch: {0:} Finished in {1:.2f} minutes".format(epoch,(time.time() - start_time)/60))
+           print("-----Epoch {0:} completed in {1:.2f} minutes-----".format(epoch,(time.time() - start_time)/60))
         

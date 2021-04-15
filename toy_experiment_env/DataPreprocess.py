@@ -7,7 +7,7 @@ Code was derived by following some of the implmentation by Hojin Yang:
 https://github.com/hojinYang/spotify_recSys_challenge_2018/blob/master/utils/spotify_reader.py
 
 """
-
+import time
 import sys
 import json
 import collections
@@ -141,11 +141,10 @@ class DataPreprocess:
         
         del data,id_dicts
         
-        print("num playlists: %d,tracks>=min_count: %d, artists>=min_count: %d,trkArt_vocabSize: %d" %
-              (len(playlists), len(t_uri2id),len(a_uri2id),data_properties['track_artist_vocab_size']))
+        print("num playlists: %d \nnum tracks>=min_count: %d \nnum artists>=min_count: %d \nnum track and artists ids: %d" %
+              (len(playlists), len(t_uri2id),len(a_uri2id),data_properties['n_tracks_artists']))
         #print(self.playlist_len_counts.most_common())
-        
-        
+            
     def process_challenge_data(self,challenge_dir):
         if self.tid_2_aid is None:
             print("Run process_train_val_data() before processing challenge data")
@@ -203,9 +202,6 @@ class DataPreprocess:
                 if a_id != -1:
                     a_ids.append(a_id)     
         return [t_ids,a_ids,c_ids,[pid]]    
-        
-    
-        
     
     @staticmethod   
     def create_ids(o_dict,min_count,start_id):
@@ -229,6 +225,7 @@ class DataPreprocess:
         return ids
         
 if __name__ == '__main__':
+    start_time = time.time()
     args = argparse.ArgumentParser(description="args")
     args.add_argument('--data_dir', type=str, default='./toy_data', help="directory where mpd slices are stored")
     args.add_argument('--challenge_data_dir', type=str, default='./challenge_data', help="directory where challenge mpd slices are stored")
@@ -236,11 +233,10 @@ if __name__ == '__main__':
     args.add_argument('--min_track', type=int, default=2, help='minimum count of tracks')
     args.add_argument('--min_artist', type=int, default=2, help='minimum count of artists')
     args = args.parse_args()
-    
     data = DataPreprocess(args.save_dir)
-    
     data.process_train_val_data(args.data_dir,args.min_track,args.min_artist)
     data.process_challenge_data(args.challenge_data_dir)
+    print("---completed in %s seconds ---" % round((time.time() - start_time),2))
     
 
 
