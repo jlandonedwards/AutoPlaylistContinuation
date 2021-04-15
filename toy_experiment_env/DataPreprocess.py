@@ -17,7 +17,7 @@ import argparse
 
 VARIOUS_ARTISTS_URI = '0LyfQWJT6nXafLPZqxe9Of'
 chars = list('''abcdefghijklmnopqrstuvwxyz/<>+-1234567890''')
-char2id = {ch: i+1 for i, ch in enumerate(chars)}
+char2id = {ch: i for i, ch in enumerate(chars)}
 
 def string_normalize(title):
         t = title.lower()

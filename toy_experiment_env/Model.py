@@ -87,7 +87,9 @@ class Model(tf.keras.Model):
     
     def loss(self,y_tracks,y_artists,y_pred):
         y_true = tf.cast(tf.concat([y_tracks,y_artists],1),tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_ids))
-        return tf.reduce_mean(-tf.reduce_sum(y_true*tf.math.log(y_pred+1e-10) + (1-y_true)*tf.math.log(1 -(y_pred+1e-10)),axis=1),axis=0)
+        l = tf.reduce_mean(-tf.reduce_sum(y_true*tf.math.log(y_pred+1e-10) + (1-y_true)*tf.math.log(1 -(y_pred+1e-10)),axis=1),axis=0)
+        reg = tf.linalg.norm(tf.concat([tf.reshape(w,-1) for w in self.trainable_weights],0))
+        return l + reg
         
     def get_reccomendations(self,x_tracks,y_tracks,y_artists,y_pred,is_train=True):
         cand_ids = self._zero_by_ids(y_pred,x_tracks,is_train)
