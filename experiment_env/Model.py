@@ -65,8 +65,7 @@ class DAE(tf.keras.layers.Layer):
        #y_pred = keras.activations.sigmoid(x)
        return y_pred
         
-    
-#loss_tracker = keras.metrics.Mean(name="loss")
+
 
 class Model(tf.keras.Model):
     def __init__(self,n_ids,n_track_ids,n_cids):
@@ -90,7 +89,7 @@ class Model(tf.keras.Model):
     def loss(self,y_tracks,y_artists,y_pred):
         y_true = tf.cast(tf.concat([y_tracks,y_artists],1),tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_ids))
         l = tf.reduce_mean(-tf.reduce_sum(y_true*tf.math.log(y_pred+1e-10) + (1-y_true)*tf.math.log(1 -y_pred+1e-10),axis=1),axis=0)
-        reg = tf.linalg.norm(tf.concat([tf.reshape(w,-1) for w in self.trainable_weights],0))
+        reg = tf.linalg.norm(tf.concat([tf.reshape(w,[-1]) for w in self.trainable_weights],0))
         return l + reg
         
     def get_reccomendations(self,x_tracks,y_tracks,y_artists,y_pred):
@@ -186,7 +185,7 @@ class Model(tf.keras.Model):
         print("Output complete")
     
     
-    #@tf.function
+    @tf.function
     def train_step(self, data):
         x_tracks,x_artists,x_titles,y_tracks,y_artists = data
         with tf.GradientTape() as tape:
@@ -201,7 +200,7 @@ class Model(tf.keras.Model):
         r_precision,ndcg,rec_clicks = self.Metrics.calculate_metrics(rec_tracks,rec_artists,y_tracks,y_artists)
         return loss,r_precision,ndcg,rec_clicks
     
-    #@tf.function
+    @tf.function
     def val_step(self,data):
         x_tracks,x_artists,x_titles,y_tracks,y_artists = data
         y_pred = self(tf.concat([x_tracks,x_artists],axis=1),x_titles, training=False)
@@ -232,19 +231,13 @@ class Model(tf.keras.Model):
         curr_epoch = self.checkpoint.curr_epoch.numpy()
         best_val_rp = self.checkpoint.best_val_rp.numpy()
         
-        
-        pb_train_metrics_names = ['batch_loss','batch_R-Prec']
-       
-        progress_bar = tf.keras.utils.Progbar(self.train_batch_size*n_batches, stateful_metrics= pb_train_metrics_names)
-        
         for epoch in range(curr_epoch,n_epochs):
-           print("\nepoch {}/{}".format(epoch+1,n_epochs))
+           print("EPOCH: ",epoch)
            start_time = time.time()
            for batch_step in range(n_batches):
                batch = next(training_set)
                loss,r_precision,ndcg,rec_clicks = self.train_step(batch)
-               progress_bar.update(batch_step*(train_batch_size+1),list(zip(pb_train_metrics_names,[np.round(loss,3),np.round(r_precision,3)])))
-               #print("[Batch #{0}],loss:{1:g},R-precison:{2:g},NDCG:{3:.3f},Rec-Clicks:{4:g}".format(batch_step,loss,r_precision,ndcg,rec_clicks))
+               print("[Batch #{0}],loss:{1:g},R-precison:{2:g},NDCG:{3:.3f},Rec-Clicks:{4:g}".format(batch_step,loss,r_precision,ndcg,rec_clicks))
                self.Metrics.update_metrics("train_batch",tf.stack([loss,r_precision,ndcg,rec_clicks],0))
                
            count = 0
@@ -262,11 +255,9 @@ class Model(tf.keras.Model):
           
    
            loss,r_precision,ndcg,rec_clicks = metrics_train
-           print("\nAVG Train: loss:{0:g},R-precison:{1:g},NDCG:{2:g},Rec-Clicks:{3:g}".format(loss,r_precision,ndcg,rec_clicks))
-           loss,r_precision,ndcg,rec_clicks  = metrics_val
+           print("AVG Train: loss:{0:g},R-precison:{1:g},NDCG:{2:g},Rec-Clicks:{3:g}".format(loss,r_precision,ndcg,rec_clicks))
+           loss,r_precision,ndcg,rec_clicks = metrics_val
            print("AVG Val: loss:{0:g},R-precison:{1:g},NDCG:{2:g},Rec-Clicks:{3:g}\n".format(loss,r_precision,ndcg,rec_clicks))
-           
-           
            
            self.checkpoint.curr_epoch.assign_add(1)
            if r_precision > best_val_rp:
@@ -280,5 +271,5 @@ class Model(tf.keras.Model):
            np.save(save_train_path + "/most_recent/train_metrics",self.Metrics.epochs_train_metrics)
            np.save(save_train_path + "/most_recent/val_metrics",self.Metrics.epochs_val_metrics)
            
-           print("Epoch: {0:} Finished in {1:.2f} minutes".format(epoch,(time.time() - start_time)/60))
+           print("EPOCH: ",epoch,"Finished in",(time.time() - start_time)/60,"minutes")
         

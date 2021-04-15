@@ -14,7 +14,6 @@ from Model import Model
 import argparse
 import time
 import sys
-import time
 
 
 gpus = tf.config.list_physical_devices('GPU')
@@ -30,14 +29,15 @@ if gpus:
     print(e)
 
 
+
 if __name__=='__main__':
     args = argparse.ArgumentParser(description="args")
-    args.add_argument('--train_dir', type=str, default='./toy_train', help="directory where training data loader is stored")
-    args.add_argument('--val_dir', type=str, default='./toy_val', help="directory where training data loader is stored")
-    args.add_argument('--challenge_data_dir', type=str, default='./toy_preprocessed/challenge_data', help="directory where challenge challange data_loader is stored")
+    args.add_argument('--train_dir', type=str, default='./train', help="directory where training data loader is stored")
+    args.add_argument('--val_dir', type=str, default='./val', help="directory where training data loader is stored")
+    args.add_argument('--challenge_data_dir', type=str, default='./data_preprocessed/challenge_data', help="directory where challenge challange data_loader is stored")
     args.add_argument('--models_dir', type=str, default='./trained_models', help="directory where to save model checkpoints")
-    args.add_argument('--load_dir', type=str, default='./trained_models/junk/post_train', help="directory where to save model checkpoints")
-    args.add_argument('--resume_dir', type=str, default='./trained_models/junk/resume/best_RP', help="directory where to save model checkpoints to resumed to in training")
+    args.add_argument('--load_dir', type=str, default='./trained_models/junk/post_train', help="directory where to load completed trained model")
+    args.add_argument('--resume_dir', type=str, default='./trained_models/junk/resume/most_recent', help="directory where to save model checkpoints to resumed to in training")
     args.add_argument('--model_name', type=str, default='junk', help="Unique Name to Save Model")
     args.add_argument('--mode', type=str, default='train', help="whether to train,resume training, or load model and start new training session")
     args = args.parse_args()
@@ -45,18 +45,17 @@ if __name__=='__main__':
     if args.mode not in ["train","resume","load"]:
         print("Please specify --mode arg as one of 'train' ,'resume', or 'load'")
         sys.exit()
-   
     resume = 0
     resume_path=""
     # All the hyperparamters that will be passed in by config object
     n_epochs = 2
-    train_batch_size = 50
-    val_batch_size = 50
+    train_batch_size = 128
+    val_batch_size = 100
     n_val_batches = 1000 // val_batch_size
-    n_ids = 81616
-    n_track_ids = 61740
+    n_ids = 1380913
+    n_track_ids = 1187154
     n_cids = 41
-    dataset = DataLoader('./toy_preprocessed/id_dicts')
+    dataset = DataLoader('./data_preprocessed/id_dicts')
     training_set = dataset.get_traing_set(args.train_dir,train_batch_size,123)
     n_train_batches = len(training_set)
     validation_sets = dataset.get_validation_sets(args.val_dir,val_batch_size)

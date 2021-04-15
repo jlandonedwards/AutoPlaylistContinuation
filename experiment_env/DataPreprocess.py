@@ -14,6 +14,7 @@ import collections
 import re
 import os
 import argparse
+import time
 
 VARIOUS_ARTISTS_URI = '0LyfQWJT6nXafLPZqxe9Of'
 chars = list('''abcdefghijklmnopqrstuvwxyz/<>+-1234567890''')
@@ -116,11 +117,10 @@ class DataPreprocess:
         id_dicts = dict()
         data_properties = dict()
         data_properties['max_title_len'] = MAX_TITLE_LEN
-        data_properties['n_chars'] = len(char2id)
-        data_properties['n_tracks'] = len(t_uri2id)
-        data_properties['n_artists'] = len(a_uri2id)           
-        data_properties['n_tracks_artists'] = len(t_uri2id) + len(a_uri2id)
-        data_properties['n_playlists'] = len(playlists)
+        data_properties['char_vocab_size'] = len(char2id) + 1
+        data_properties['track_vocab_size'] = len(t_uri2id)
+        data_properties['artist_vocab_size'] = len(a_uri2id)           
+        data_properties['track_artist_vocab_size'] = len(t_uri2id) + len(a_uri2id)
         id_dicts['t_uri2id'] = t_uri2id
         id_dicts['a_uri2id'] = a_uri2id
         id_dicts['tid_2_aid'] = tid_2_aid
@@ -229,18 +229,19 @@ class DataPreprocess:
         return ids
         
 if __name__ == '__main__':
+    start_time = time.time()
     args = argparse.ArgumentParser(description="args")
-    args.add_argument('--data_dir', type=str, default='./toy_data', help="directory where mpd slices are stored")
+    args.add_argument('--data_dir', type=str, default='./data', help="directory where mpd slices are stored")
     args.add_argument('--challenge_data_dir', type=str, default='./challenge_data', help="directory where challenge mpd slices are stored")
-    args.add_argument('--save_dir', type=str, default='./toy_preprocessed', help="directory where to store outputed data file")
+    args.add_argument('--save_dir', type=str, default='./data_preprocessed', help="directory where to store outputed data file")
     args.add_argument('--min_track', type=int, default=2, help='minimum count of tracks')
     args.add_argument('--min_artist', type=int, default=2, help='minimum count of artists')
     args = args.parse_args()
     
     data = DataPreprocess(args.save_dir)
-    
     data.process_train_val_data(args.data_dir,args.min_track,args.min_artist)
     data.process_challenge_data(args.challenge_data_dir)
+    print("--- %s seconds ---" % (time.time() - start_time))
     
 
 
