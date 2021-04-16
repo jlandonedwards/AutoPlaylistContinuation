@@ -39,30 +39,67 @@ class CharacterCNN(tf.keras.layers.Layer):
         super(CharacterCNN, self).__init__()
         self.n_ids = n_ids
         self.emb = Embedding(n_cids,embedding_dim)
-        self.ff1 = keras.layers.Dense(32,activation='relu')
-        
+        self.ff1 = keras.layers.Dense(1014,activation='relu')
+        self.conv1 = tf.keras.layers.Conv1D(256, 7, activation='relu')
+        self.maxpool1 = tf.keras.layers.MaxPooling1D(pool_size=3)
+        self.conv2 = tf.keras.layers.Conv1D(256, 7, activation='relu')
+        self.maxpool2 = tf.keras.layers.MaxPooling1D(pool_size=3)
+        self.conv3 = tf.keras.layers.Conv1D(256, 3, activation='relu')
+        self.conv4 = tf.keras.layers.Conv1D(256, 3, activation='relu')
+        self.conv5 = tf.keras.layers.Conv1D(256, 3, activation='relu')
+        self.conv6 = tf.keras.layers.Conv1D(256, 3, activation='relu')
+        self.maxpool3 = tf.keras.layers.MaxPooling1D(pool_size=3)
+        self.flatten = tf.keras.layers.Flatten()
+        self.ff2 = keras.layers.Dense(1024,activation='relu')
+        self.dropout1 = keras.layers.Dropout(0.5)
+        self.ff3 = keras.layers.Dense(1024,activation='relu')
+        self.dropout2 = keras.layers.Dropout(0.5)
+        self.ff4 = keras.layers.Dense(32,activation='relu')
     
     def call(self, ids,training=False):
+       # print("ids")
+       # print(ids)
+       # print(ids.shape)
        x = self.emb(ids)
+       # print("x")
+       # print(x)       
        x = self.ff1(x)
+       x = tf.reshape(x, (x.shape[0], x.shape[1], 1))
+       x = self.conv1(x)
+       x = self.maxpool1(x)
+       x = self.conv2(x)
+       x = self.maxpool2(x)
+       x = self.conv3(x)
+       x = self.conv4(x)
+       x = self.conv5(x)
+       x = self.conv6(x)
+       x = self.maxpool3(x)
+       x = self.flatten(x)
+       x = self.ff2(x)
+       x = self.dropout1(x)
+       x = self.ff3(x)
+       x = self.dropout2(x)
+       x = self.ff4(x)
        y_pred = keras.activations.softmax(x,axis=1)
-       return y_pred    
+       return y_pred
             
         
    
     
 
 class DAE(tf.keras.layers.Layer):
-    def __init__(self,n_ids,embedding_dim=32):
+    def __init__(self,n_ids,embedding_dim=256):
         super(DAE, self).__init__()
+        self.b0 = tf.Variable(tf.random.normal(shape=[embedding_dim],dtype=tf.float32),trainable=True)
+        self.b1 = tf.Variable(tf.random.normal(shape=[n_ids],dtype=tf.float32),trainable=True)
         self.emb = Embedding(n_ids,embedding_dim)
         self.ff1 = keras.layers.Dense(32,activation='relu')
     
     def call(self, ids,training=False):
-       x = self.emb(ids)
+       x = self.emb(ids) + self.b0
        x = keras.activations.relu(x)
-       x = x @ K.transpose(self.emb.w)
-       y_pred = self.ff1(x)
+       x = x @ K.transpose(self.emb.w) + self.b1
+       y_pred = self.ff1(x )
        #y_pred = keras.activations.softmax(x,axis=1)
        #y_pred = keras.activations.sigmoid(x)
        return y_pred
@@ -91,7 +128,7 @@ class Model(tf.keras.Model):
     
     def loss(self,y_tracks,y_artists,y_pred):
         y_true = tf.cast(tf.concat([y_tracks,y_artists],1),tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_ids))
-        l = tf.reduce_mean(-tf.reduce_sum(y_true*tf.math.log(y_pred+1e-10) + (1-y_true)*tf.math.log(1 -y_pred+1e-10),axis=1),axis=0)
+        l = tf.reduce_mean(-tf.reduce_sum(y_true*tf.math.log(y_pred+1e-10) + .55*(1-y_true)*tf.math.log(1 -y_pred+1e-10),axis=1),axis=0)
         reg = tf.linalg.norm(tf.concat([tf.reshape(w,[-1]) for w in self.trainable_weights],0))
         return l + reg
         
@@ -173,7 +210,6 @@ class Model(tf.keras.Model):
                batch = next(training_set)
                loss,r_precision,ndcg,rec_clicks = self.train_step(batch)
                progress_bar.update((batch_step+1)*train_batch_size,list(zip(pb_train_metrics_names,[loss,np.round(r_precision,3)])))
-               #print("[Batch #{0}],loss:{1:g},R-precison:{2:g},NDCG:{3:.3f},Rec-Clicks:{4:g}".format(batch_step,loss,r_precision,ndcg,rec_clicks))
                self.Metrics.update_metrics("train_batch",tf.stack([loss,r_precision,ndcg,rec_clicks],0))
                
            count = 0
