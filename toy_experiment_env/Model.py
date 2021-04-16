@@ -12,6 +12,8 @@ from tensorflow import keras
 from tensorflow.keras import backend as K
 from Metrics import Metrics
 import time
+import json
+import csv
 
 class Embedding(tf.keras.layers.Layer):
     def __init__(self,n_ids,embedding_dim=32):
@@ -90,101 +92,28 @@ class Model(tf.keras.Model):
     def loss(self,y_tracks,y_artists,y_pred):
         y_true = tf.cast(tf.concat([y_tracks,y_artists],1),tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_ids))
         l = tf.reduce_mean(-tf.reduce_sum(y_true*tf.math.log(y_pred+1e-10) + (1-y_true)*tf.math.log(1 -y_pred+1e-10),axis=1),axis=0)
-        reg = tf.linalg.norm(tf.concat([tf.reshape(w,-1) for w in self.trainable_weights],0))
+        reg = tf.linalg.norm(tf.concat([tf.reshape(w,[-1]) for w in self.trainable_weights],0))
         return l + reg
         
-    def get_reccomendations(self,x_tracks,y_tracks,y_artists,y_pred):
+    def get_reccomendations(self,x_tracks,y_pred):
         cand_ids = self._zero_by_ids(y_pred,x_tracks)
         cand_track = cand_ids[:,0:self.n_track_ids]
         cand_artist = cand_ids[:,self.n_track_ids:]
+
         _,rec_tracks = tf.math.top_k(cand_track,k=500)
+        test = tf.sets.intersection(tf.cast(rec_tracks,tf.int32),x_tracks.to_sparse())
+        missed = tf.sets.size(test)
+        total_missed = tf.reduce_sum(missed,0)
+        if total_missed > 0:
+            print("debug")
         _,rec_artists = tf.math.top_k(cand_artist,k=500)
         rec_artists += self.n_track_ids
         return rec_tracks,rec_artists
     
     def _zero_by_ids(self,tensor,ids):
         ids_2d = tf.stack([tf.ones_like(ids)*tf.expand_dims(tf.range(tensor.shape[0]),1),ids],2)
-        zeros = tf.zeros_like(ids,dtype=tf.float32)
-        return tf.tensor_scatter_nd_update(tensor,ids_2d.flat_values,zeros.flat_values)
-    
-    # TODO this processing can be made redundant by DataProcessing challenge batches same way as Train batches
-    def process_challenge_batch_for_prediction(self, current_batch):
-        # tracks
-        list_of_track_tensors = [row[0] for row in current_batch]
-        vals1 = tf.concat(list_of_track_tensors, axis = 0)
-        lens1 = tf.stack([tf.shape(t, out_type = tf.int64)[0] for t in list_of_track_tensors])
-        x_tracks = tf.RaggedTensor.from_row_lengths(vals1, lens1)
-        del list_of_track_tensors, vals1, lens1
-
-        # artists
-        list_of_artist_tensors = [row[1] for row in current_batch]
-        vals2 = tf.concat(list_of_artist_tensors, axis = 0)
-        lens2 = tf.stack([tf.shape(t, out_type = tf.int64)[0] for t in list_of_artist_tensors])
-        x_artists = tf.RaggedTensor.from_row_lengths(vals2, lens2)
-        del list_of_artist_tensors, vals2, lens2
-
-        # titles
-        list_of_title_tensors = [row[2] for row in current_batch]
-        vals3 = tf.concat(list_of_title_tensors, axis = 0)
-        lens3 = tf.stack([tf.shape(t, out_type = tf.int64)[0] for t in list_of_title_tensors])
-        x_titles = tf.RaggedTensor.from_row_lengths(vals3, lens3)
-        del list_of_title_tensors, vals3, lens3
-
-        # playlist IDs
-        list_of_pids = [row[3].numpy()[0] for row in current_batch]
-
-        return x_tracks, x_artists, x_titles, list_of_pids
-    
-    # TODO optimize to speed up/parallelize
-    # - Can use Tensor of strings with index as keys to replace tid_2_uri_dict
-    # - Can use Tensor dict
-    def get_challenge_submission(self, pids, rec_tracks, tid_2_uri_dict):
-        
-        def convert_tid_2_uri(tracks_tensor):
-            return(tf.map_fn(fn = lambda x: tid_2_uri_dict[str(x.numpy())], elems = tracks_tensor, fn_output_signature = tf.string))
-        
-        submission_tracks = tf.map_fn(fn = lambda x: convert_tid_2_uri(x), elems = rec_tracks, fn_output_signature = tf.TensorSpec(rec_tracks[0].shape, tf.string))
-        submissions = list(map(lambda x: [pids[x]] + ["spotify:track:" + a.decode("utf-8") for a in list(submission_tracks.numpy()[x])], range(0,len(pids))))
-
-        return submissions
-    
-    def write_submission_to_file(self, submissions, path_to_file):
-        import csv
-        
-        with open(path_to_file, 'w', newline = '') as outFile:
-            wr = csv.writer(outFile, quoting = csv.QUOTE_NONE)
-            wr.writerow(['team_info'] + ['my awesome team name'] + ['my_awesome_team@email.com'])
-            wr.writerows(submissions)
-            outFile.close()
-    
-    def generate_submissions(self, save_dir, challenge_data):
-        import json
-        import DataLoader
-
-        with open(challenge_data) as cfile:
-            cdata = json.load(cfile)
-            cfile.close()
-            tid_2_uri_dict = cdata['tid_2_uri']
-            del(cdata)
-        
-        dataset = DataLoader('./toy_preprocessed/id_dicts')
-        challenge_sets = dataset.get_challenge_sets('./toy_preprocessed/challenge_data')
-        batchCtr = 0
-
-        for current_batch in challenge_sets:
-            print(f"Batch number = {batchCtr}")
-            batchCtr = batchCtr + 1
-            x_tracks, x_artists, x_titles, pids = self.process_challenge_batch_for_prediction(current_batch = current_batch)            
-            y_pred = self(tf.concat([x_tracks, x_artists], axis = 1), x_titles, training=False)
-            rec_tracks,rec_artists = self.get_reccomendations(x_tracks = x_tracks, y_tracks = None, y_artists = None, y_pred = y_pred)       
-            
-            # Takes about 5 minutes (see get_challenge_submission() definition)
-            submissions = submissions + self.get_challenge_submission(pids, rec_tracks, tid_2_uri_dict)
-
-        print("Submissions generated, outputting to file")
-        self.write_submission_to_file(submissions, save_dir)
-        print("Output complete")
-    
+        ones = tf.ones_like(ids,dtype=tf.float32) *-1
+        return tf.tensor_scatter_nd_update(tensor,ids_2d.flat_values,ones.flat_values)
     
     #@tf.function
     def train_step(self, data):
@@ -197,7 +126,7 @@ class Model(tf.keras.Model):
             trainable_vars = self.trainable_variables
             gradients = tape.gradient(loss, trainable_vars)
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-        rec_tracks,rec_artists = self.get_reccomendations(x_tracks,y_tracks,y_artists,y_pred)
+        rec_tracks,rec_artists = self.get_reccomendations(x_tracks,y_pred)
         r_precision,ndcg,rec_clicks = self.Metrics.calculate_metrics(rec_tracks,rec_artists,y_tracks,y_artists)
         return loss,r_precision,ndcg,rec_clicks
     
@@ -206,7 +135,7 @@ class Model(tf.keras.Model):
         x_tracks,x_artists,x_titles,y_tracks,y_artists = data
         y_pred = self(tf.concat([x_tracks,x_artists],axis=1),x_titles, training=False)
         loss = self.loss(y_tracks,y_artists,y_pred)
-        rec_tracks,rec_artists = self.get_reccomendations(x_tracks,y_tracks,y_artists,y_pred)
+        rec_tracks,rec_artists = self.get_reccomendations(x_tracks,y_pred)
         r_precision,ndcg,rec_clicks = self.Metrics.calculate_metrics(rec_tracks,rec_artists,y_tracks,y_artists)
         return loss,r_precision,ndcg,rec_clicks
     
@@ -281,4 +210,26 @@ class Model(tf.keras.Model):
            np.save(save_train_path + "/most_recent/val_metrics",self.Metrics.epochs_val_metrics)
            
            print("-----Epoch {0:} completed in {1:.2f} minutes-----".format(epoch,(time.time() - start_time)/60))
+          
+    def generate_challenge_submissions(self,challenge_sets,save_path,team_name,email):
+        with open('./utils/tid_2_uri') as file:
+            tid_2_uri = tf.constant(list(json.load(file).items()))
+            file.close()
         
+        tid_2_uri = tf.lookup.StaticHashTable(tf.lookup.KeyValueTensorInitializer(
+            tf.strings.to_number(tid_2_uri[:,0],out_type=tf.int32),tid_2_uri[:,1]),"-")
+        submissions= []
+        for  x_tracks,x_artists,x_titles,(pid) in challenge_sets:
+            y_pred = self(tf.concat([x_tracks,x_artists],axis=1),x_titles,training=False)
+        
+            rec_tracks,_ = self.get_reccomendations(x_tracks,y_pred)
+            uris = "spotify:track:" + tid_2_uri[rec_tracks]
+            uris = tf.concat([tf.strings.as_string(pid),uris],1)
+            submissions += uris.numpy().astype(str).tolist()
+    
+        with open(save_path, 'w', newline = '') as outFile:
+            wr = csv.writer(outFile, quoting = csv.QUOTE_NONE)
+            wr.writerow(['team_info',team_name,email])
+            wr.writerows(submissions)
+            outFile.close()
+        print("---- Submission saved to {0:} ------".format(save_path))

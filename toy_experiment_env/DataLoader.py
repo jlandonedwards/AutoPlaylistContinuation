@@ -12,28 +12,26 @@ import  json
  
 class DataLoader():
     
-    def __init__(self,dict_path):
-        self.dict_path = dict_path
-        self.tid_2_aid = None
+    def __init__(self,util_dir):
+        self.util_dir = util_dir
         
         
         
+    def get_traing_set(self,batch_size,seed):
+        training_set = tf.data.experimental.load("./train",tf.RaggedTensorSpec(tf.TensorShape([3, None]), tf.int32, 1, tf.int64))
         
-    def get_traing_set(self,train_dir,batch_size,seed):
-        training_set = tf.data.experimental.load(train_dir,tf.RaggedTensorSpec(tf.TensorShape([3, None]), tf.int32, 1, tf.int64))
-        if self.tid_2_aid is None:
-            with open(self.dict_path) as file:
-                id_dicts = json.load(file)
-                file.close()  
-            tid_2_aid = tf.constant(id_dicts['tid_2_aid'])
+        with open('./utils/tid_2_aid') as file:
+            tid_2_aid = tf.constant(json.load(file))
+            file.close()  
+            
             self.tid_2_aid = tf.lookup.StaticHashTable(tf.lookup.KeyValueTensorInitializer(tid_2_aid[:,0],tid_2_aid[:,1]),default_value=-1)
-            del id_dicts,tid_2_aid
+            del tid_2_aid
         tf.random.set_seed(seed)
         np.random.seed(seed)
         return training_set.map(lambda x: self.corrupt(x)).shuffle(1000,seed,True).apply(tf.data.experimental.dense_to_ragged_batch(batch_size,drop_remainder=True))
     
-    def get_validation_sets(self,val_dir,batch_size):
-        validation_sets = tf.data.experimental.load(val_dir,
+    def get_validation_sets(self,batch_size):
+        validation_sets = tf.data.experimental.load("./val",
                                                     (tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
                                                      tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
                                                      tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
@@ -41,12 +39,12 @@ class DataLoader():
                                                      tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None)))
         return validation_sets.apply(tf.data.experimental.dense_to_ragged_batch(batch_size))
     
-    def get_challenge_sets(self,challenge_dir):
-        with open(challenge_dir) as file:
-                data = json.load(file)
-                file.close()
-        challenge_data = tf.data.Dataset.from_tensor_slices(tf.ragged.constant(data['challenge_playlists']))
-        return challenge_data.batch(1000)
+    def get_challenge_sets(self,batch_size):
+        challenge_data = tf.data.experimental.load("./challenge",(tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
+                                                                 tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
+                                                                 tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None),
+                                                                 tf.TensorSpec(shape=(None,), dtype=tf.int32, name=None)))
+        return challenge_data.apply(tf.data.experimental.dense_to_ragged_batch(batch_size))
     
     
     

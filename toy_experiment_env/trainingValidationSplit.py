@@ -33,7 +33,10 @@ def map_func(x):
         'title_ids':x[1],
         'n_tracks':x[2][0],
         }
-
+@tf.autograph.experimental.do_not_convert
+def challenge_map_func(x):
+    return (x[0],x[1],x[2],x[3])
+         
 @tf.autograph.experimental.do_not_convert
 def get_artists(track_ids):
     artist_ids = tid_2_aid[track_ids]
@@ -127,37 +130,31 @@ def create_val_set(tf_dataset,n_playlists,n_input_tracks,title=1,rand=0):
 if __name__ == '__main__':
     start_time = time.time()
     args = argparse.ArgumentParser(description="args")
-    args.add_argument('--data_dir', type=str, default='./toy_preprocessed/data', help="directory where preprocessed data is stored")
-    args.add_argument('--val_dir', type=str, default='./toy_val', help="directory where to witre validation sets to")
-    args.add_argument('--train_dir', type=str, default='./toy_train', help="directory where to write training sets to")
-    args.add_argument('--dict_dir', type=str, default='./toy_preprocessed/id_dicts', help="directory where to write training sets to")
-    args.add_argument('--test_load', type=int, default=0, help='test loading each validation set and making sure they are equivalent to the saved')
+    args.add_argument('--data_dir', type=str, default='./toy_preprocessed', help="directory where preprocessed data is stored")
+    args.add_argument('--utils_dir', type=str, default='./utils', help="directory where to write training sets to")
     args = args.parse_args()
     
-    if not os.path.isdir(args.val_dir):
-        os.mkdir(args.val_dir)
-    else:
-        os.removedirs(args.val_dir)
-        os.mkdir(args.val_dir)
-    if not os.path.isdir(args.train_dir):
-        os.mkdir(args.train_dir)
-    else:
-        os.removedirs(args.train_dir)
-        os.mkdir(args.train_dir)
+    if not os.path.isdir("./val"):
+        os.mkdir("./val")
+    
+        
+    if not os.path.isdir("./train"):
+        os.mkdir("./train")
+    
+    if not os.path.isdir("./challenge"):
+        os.mkdir("./challenge")
     
     tf.random.set_seed(2021)
     np.random.seed(2021)
-    with open(args.data_dir) as file:
+    with open(args.data_dir + "/" + "data") as file:
         data = json.load(file)
         file.close()  
     playlists = data['playlists']    
     del data
-    with open(args.dict_dir) as file:
-        id_dicts = json.load(file)
+    with open(args.utils_dir + "/" + "tid_2_aid") as file:
+        tid_2_aid = tf.constant(json.load(file))
         file.close()  
-    tid_2_aid = tf.constant(id_dicts['tid_2_aid'])
     tid_2_aid = tf.lookup.StaticHashTable(tf.lookup.KeyValueTensorInitializer(tid_2_aid[:,0],tid_2_aid[:,1]),default_value=-1)
-    del id_dicts
     n_playlists = len(playlists)
     
     dataset = tf.data.Dataset.from_tensor_slices(tf.ragged.constant(playlists))
@@ -174,11 +171,21 @@ if __name__ == '__main__':
         
     
     # Dataset where each element is it own validation set
-    tf.data.experimental.save(validation_sets, args.val_dir)
+    tf.data.experimental.save(validation_sets, "./val")
     
     # Full Uncorrupted Training Dataset
     train_set = train_set.map(train_to_ragged)
-    tf.data.experimental.save(train_set, args.train_dir)
+    tf.data.experimental.save(train_set, "./train")
+    
+    # Load Challenge Set
+    with open(args.data_dir + "/challenge_data") as file:
+        data = json.load(file)
+        file.close()  
+    challenge_sets = tf.data.Dataset.from_tensor_slices(tf.ragged.constant(data['challenge_playlists']))
+    challenge_sets = challenge_sets.map(challenge_map_func)
+    del data
+    tf.data.experimental.save(challenge_sets, "./challenge")
+    
     print("---completed in %s seconds ---" % round((time.time() - start_time),2))
     
 '''

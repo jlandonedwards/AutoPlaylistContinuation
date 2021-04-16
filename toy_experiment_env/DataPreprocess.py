@@ -40,11 +40,11 @@ def title2ids(title):
 class DataPreprocess:
     """
     Convert original provided data into structured inputs for model (WIP)
-    sav_dir: STRING
+    save_dir: STRING
             Path where processed data files will be is saved
     """
-    def __init__(self,sav_dir):
-        self.sav_dir = sav_dir
+    def __init__(self,save_dir):
+        self.save_dir = save_dir
         self.tid_2_aid = None
         
     def process_train_val_data(self, data_dir,min_track=2, min_artist=2):
@@ -97,10 +97,14 @@ class DataPreprocess:
             a_id =  a_uri2id.get(a_uri,-1)
             if a_id == -1: continue
             tid_2_aid.append((t_uri2id[t_uri] , a_id))
+            
+        with open(args.utils_dir + '/tid_2_aid', 'w') as file:
+            json.dump(tid_2_aid,file,indent="\t")
+            file.close()
         
-        self.tid_2_aid = dict(tid_2_aid)
         self.t_uri2id = t_uri2id
-        self.a_uri2id = a_uri2id
+        self.tid_2_aid = dict(tid_2_aid)
+        
         
         # Convert artists and tracks uris to coressponding ids and titles to seperate set of character ids
         playlists = []
@@ -113,7 +117,6 @@ class DataPreprocess:
             playlists.append([tid,cid,[len(tid)]])
         
         data = dict()
-        id_dicts = dict()
         data_properties = dict()
         data_properties['max_title_len'] = MAX_TITLE_LEN
         data_properties['n_chars'] = len(char2id)
@@ -121,25 +124,18 @@ class DataPreprocess:
         data_properties['n_artists'] = len(a_uri2id)           
         data_properties['n_tracks_artists'] = len(t_uri2id) + len(a_uri2id)
         data_properties['n_playlists'] = len(playlists)
-        id_dicts['t_uri2id'] = t_uri2id
-        id_dicts['a_uri2id'] = a_uri2id
-        id_dicts['tid_2_aid'] = tid_2_aid
         data['playlists'] = playlists
         #data['playlists_counts'] = self.playlist_len_counts.most_common()
         
-        if not os.path.isdir(self.sav_dir):
-            os.mkdir(self.sav_dir)
-        with open(self.sav_dir+'/'+'data', 'w') as file:
+        with open(self.save_dir+'/'+'data', 'w') as file:
             json.dump(data,file,indent="\t")
             file.close()
-        with open(self.sav_dir+'/'+'id_dicts', 'w') as file:
-            json.dump(id_dicts,file,indent="\t")
-            file.close()
-        with open(self.sav_dir+'/'+'data_properties', 'w') as file:
+       
+        with open(args.utils_dir + '/data_properties', 'w') as file:
             json.dump(data_properties,file,indent="\t")
             file.close()
         
-        del data,id_dicts
+        del data
         
         print("num playlists: %d \nnum tracks>=min_count: %d \nnum artists>=min_count: %d \nnum track and artists ids: %d" %
               (len(playlists), len(t_uri2id),len(a_uri2id),data_properties['n_tracks_artists']))
@@ -165,9 +161,13 @@ class DataPreprocess:
                 challenge_playlists.append(self.process_challenge_playlist(playlist))
         
         data = {'challenge_playlists':challenge_playlists}
-        data['tid_2_uri'] = {v: k for k, v in self.t_uri2id.items()}
-        with open(self.sav_dir+'/'+'challenge_data', 'w') as file:
+        tid_2_uri = {v: k for k, v in self.t_uri2id.items()}
+        with open(self.save_dir+'/'+'challenge_data', 'w') as file:
             json.dump(data,file,indent="\t")
+            file.close()
+        
+        with open(args.utils_dir + '/tid_2_uri', 'w') as file:
+            json.dump(tid_2_uri,file,indent="\t")
             file.close()
         
     def process_playlist(self,playlist):
@@ -201,7 +201,7 @@ class DataPreprocess:
                 a_id = self.tid_2_aid.get(t_id,-1)
                 if a_id != -1:
                     a_ids.append(a_id)     
-        return [t_ids,a_ids,c_ids,[pid]]    
+        return (t_ids,a_ids,c_ids,[pid])    
     
     @staticmethod   
     def create_ids(o_dict,min_count,start_id):
@@ -230,12 +230,22 @@ if __name__ == '__main__':
     args.add_argument('--data_dir', type=str, default='./toy_data', help="directory where mpd slices are stored")
     args.add_argument('--challenge_data_dir', type=str, default='./challenge_data', help="directory where challenge mpd slices are stored")
     args.add_argument('--save_dir', type=str, default='./toy_preprocessed', help="directory where to store outputed data file")
+    args.add_argument('--utils_dir', type=str, default='./utils', help="directory where to store outputed data file")
     args.add_argument('--min_track', type=int, default=2, help='minimum count of tracks')
     args.add_argument('--min_artist', type=int, default=2, help='minimum count of artists')
     args = args.parse_args()
+    
+    if not os.path.isdir(args.save_dir):
+            os.mkdir(args.save_dir)
+    if not os.path.isdir("./utils"):
+        os.mkdir("./utils")
+    
     data = DataPreprocess(args.save_dir)
     data.process_train_val_data(args.data_dir,args.min_track,args.min_artist)
     data.process_challenge_data(args.challenge_data_dir)
+    
+    
+            
     print("---completed in %s seconds ---" % round((time.time() - start_time),2))
     
 
