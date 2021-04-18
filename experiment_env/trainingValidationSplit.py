@@ -187,12 +187,7 @@ if __name__ == '__main__':
     tf.data.experimental.save(challenge_sets, "./challenge")
     
     print("---completed in %s minutes ---" % round((time.time() - start_time)/60,2))
-    
-'''
-To Do:
-    Figure out how to feed Validation sets 1 to 9 sequentially into model.fit(val=validation_data)
-    So that it gets called and reports the meterics at the end of each epoch
-'''    
+       
     
     
     

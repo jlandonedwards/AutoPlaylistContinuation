@@ -60,7 +60,7 @@ class DataLoader():
     def gt_n(self,x,corrupt_track):
         p2 = np.random.uniform(size=1)
         if p2 > 0.5:
-            keep_rate = tf.random.uniform(minval=.2,maxval=.5,shape=())
+            keep_rate = tf.random.uniform(minval=.4,maxval=.7,shape=())
             n_inputs = tf.cast(tf.cast(x[2][0],tf.float32) * keep_rate,tf.int32)
             return self.random_id_corrupt(x,corrupt_track,n_inputs)
         
@@ -70,7 +70,7 @@ class DataLoader():
 
     @tf.autograph.experimental.do_not_convert
     def le_n(self,x,corrupt_track):
-        keep_rate = tf.random.uniform(minval=.2,maxval=.5,shape=())
+        keep_rate = tf.random.uniform(minval=.7,maxval=.9,shape=())
         n_inputs = tf.cast(tf.cast(x[2][0],tf.float32) * keep_rate,tf.int32)
         return self.seq_id_corrput(x,corrupt_track,n_inputs)
     

@@ -119,6 +119,7 @@ class DataPreprocess:
         
         data = dict()
         data_properties = dict()
+        data_hist = dict()
         data_properties['max_title_len'] = MAX_TITLE_LEN
         data_properties['n_chars'] = len(char2id)
         data_properties['n_tracks'] = len(t_uri2id)
@@ -126,13 +127,8 @@ class DataPreprocess:
         data_properties['n_tracks_artists'] = len(t_uri2id) + len(a_uri2id)
         data_properties['n_playlists'] = len(playlists)
         data['playlists'] = playlists
-        #data['playlists_counts'] = self.playlist_len_counts.most_common()
-        
-        plt(self.playlist_len_counts.keys(),self.playlist_len_counts.values())
-        plt.title("Distribution of Playlists Tracks Counts")
-        plt.xlabel("Number of Tracks")
-        plt.ylabel("Count of playlists")
-        plt.show()
+        data_hist['playlists_counts'] = self.playlist_len_counts.most_common()
+
         
         with open(self.save_dir+'/'+'data', 'w') as file:
             json.dump(data,file,indent="\t")
@@ -140,6 +136,10 @@ class DataPreprocess:
        
         with open(args.utils_dir + '/data_properties', 'w') as file:
             json.dump(data_properties,file,indent="\t")
+            file.close()
+        
+        with open(args.utils_dir + '/data_counts', 'w') as file:
+            json.dump(data_hist,file,indent="\t")
             file.close()
         
         del data
@@ -238,8 +238,8 @@ if __name__ == '__main__':
     args.add_argument('--challenge_data_dir', type=str, default='./challenge_data', help="directory where challenge mpd slices are stored")
     args.add_argument('--save_dir', type=str, default='./preprocessed_data', help="directory where to store outputed data file")
     args.add_argument('--utils_dir', type=str, default='./utils', help="directory where to store outputed data file")
-    args.add_argument('--min_track', type=int, default=1, help='minimum count of tracks')
-    args.add_argument('--min_artist', type=int, default=1, help='minimum count of artists')
+    args.add_argument('--min_track', type=int, default=2, help='minimum count of tracks')
+    args.add_argument('--min_artist', type=int, default=2, help='minimum count of artists')
     args = args.parse_args()
     
     if not os.path.isdir(args.save_dir):
@@ -250,6 +250,13 @@ if __name__ == '__main__':
     dataset = DataPreprocess(args.save_dir)
     dataset.process_train_val_data(args.data_dir,args.min_track,args.min_artist)
     dataset.process_challenge_data(args.challenge_data_dir)
+    
+    labels, values = zip(*dataset.playlist_len_counts.most_common())
+    plt.bar([int(i) for i in labels], values)
+    plt.title("Playlists Length Distribution")
+    plt.xlabel("Playlist Length")
+    plt.ylabel("Count")
+    plt.show()
     
     
             
