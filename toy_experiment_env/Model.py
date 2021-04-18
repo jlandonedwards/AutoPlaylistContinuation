@@ -14,6 +14,31 @@ from Metrics import Metrics
 import time
 import json
 import csv
+import tensorflow_addons as tfa
+
+
+# class MultiHeadAttention(tf.keras.layers.Layer):
+#     def __init__(self,head_size,num_heads):
+#         super(MultiHeadAttention, self).__init__()
+#         self.ff1 = keras.layers.Dense(units=head_size*num_heads,activation=tfa.activations.mish)
+#         self.ff2 = keras.layers.Dense(units=head_size*num_heads,activation=tfa.activations.mish)
+#         self.mha = tfa.layers.MultiHeadAttention(head_size, num_heads)
+        
+#     def call(self,query,key):
+#         key = self.ff1(key)
+#         query = self.ff2(query)
+#         return self.mha([query,key])
+
+
+import tensorflow as tf
+import numpy as np
+import math
+from tensorflow import keras
+from tensorflow.keras import backend as K
+from Metrics import Metrics
+import time
+import json
+import csv
 
 class Embedding(tf.keras.layers.Layer):
     def __init__(self,n_ids,embedding_dim=32):
@@ -55,33 +80,35 @@ class CharacterCNN(tf.keras.layers.Layer):
         self.ff3 = keras.layers.Dense(1024,activation='relu')
         self.dropout2 = keras.layers.Dropout(0.5)
         self.ff4 = keras.layers.Dense(32,activation='relu')
-    
+        self.bn1 = keras.layers.BatchNormalization()
+        self.bn2 = keras.layers.BatchNormalization()
+        self.bn3 = keras.layers.BatchNormalization()
+        self.bn4 = keras.layers.BatchNormalization()
+        
     def call(self, ids,training=False):
-       # print("ids")
-       # print(ids)
-       # print(ids.shape)
-       x = self.emb(ids)
-       # print("x")
-       # print(x)       
+       x = self.emb(ids) 
        x = self.ff1(x)
        x = tf.reshape(x, (x.shape[0], x.shape[1], 1))
        x = self.conv1(x)
        x = self.maxpool1(x)
        x = self.conv2(x)
        x = self.maxpool2(x)
+       x= self.bn1(x)
        x = self.conv3(x)
        x = self.conv4(x)
+       x= self.bn2(x)
        x = self.conv5(x)
        x = self.conv6(x)
        x = self.maxpool3(x)
        x = self.flatten(x)
+       x= self.bn3(x)
        x = self.ff2(x)
        x = self.dropout1(x)
        x = self.ff3(x)
        x = self.dropout2(x)
        x = self.ff4(x)
-       y_pred = keras.activations.softmax(x,axis=1)
-       return y_pred
+       x = self.bn4(x)
+       return x
             
         
    
@@ -94,12 +121,14 @@ class DAE(tf.keras.layers.Layer):
         self.b1 = tf.Variable(tf.random.normal(shape=[n_ids],dtype=tf.float32),trainable=True)
         self.emb = Embedding(n_ids,embedding_dim)
         self.ff1 = keras.layers.Dense(32,activation='relu')
+        self.bn = keras.layers.BatchNormalization()
     
     def call(self, ids,training=False):
        x = self.emb(ids) + self.b0
        x = keras.activations.relu(x)
        x = x @ K.transpose(self.emb.w) + self.b1
-       y_pred = self.ff1(x )
+       y_pred = self.ff1(x)
+       y_pred = self.bn(y_pred)
        #y_pred = keras.activations.softmax(x,axis=1)
        #y_pred = keras.activations.sigmoid(x)
        return y_pred
@@ -127,10 +156,17 @@ class Model(tf.keras.Model):
     
     
     def loss(self,y_tracks,y_artists,y_pred):
-        y_true = tf.cast(tf.concat([y_tracks,y_artists],1),tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_ids))
-        l = tf.reduce_mean(-tf.reduce_sum(y_true*tf.math.log(y_pred+1e-10) + .55*(1-y_true)*tf.math.log(1 -y_pred+1e-10),axis=1),axis=0)
+        y_pred_tracks = y_pred[:,0:self.n_track_ids]
+        y_pred_artists = y_pred[:,self.n_track_ids:]
+        y_tracks = tf.cast(y_tracks,tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_track_ids))
+        y_artists = tf.cast(y_artists,tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_ids-self.n_track_ids))
+        l = self.cross_entropy(y_tracks,y_pred_tracks) + .5* self.cross_entropy(y_artists,y_pred_artists)
         reg = tf.linalg.norm(tf.concat([tf.reshape(w,[-1]) for w in self.trainable_weights],0))
-        return l + reg
+        
+        return l + 0.01* reg
+    
+    def cross_entropy(self,y_true,y_pred):
+         return tf.reduce_mean(-tf.reduce_sum(y_true*tf.math.log(y_pred+1e-10) + .55*(1-y_true)*tf.math.log(1 -y_pred+1e-10),axis=1),axis=0)
         
     def get_reccomendations(self,x_tracks,y_pred):
         cand_ids = self._zero_by_ids(y_pred,x_tracks)
@@ -152,7 +188,7 @@ class Model(tf.keras.Model):
         ones = tf.ones_like(ids,dtype=tf.float32) *-1
         return tf.tensor_scatter_nd_update(tensor,ids_2d.flat_values,ones.flat_values)
     
-    #@tf.function
+    @tf.function
     def train_step(self, data):
         x_tracks,x_artists,x_titles,y_tracks,y_artists = data
         with tf.GradientTape() as tape:
@@ -193,8 +229,8 @@ class Model(tf.keras.Model):
             self.Metrics.epochs_train_metrics = np.load(resume_path + "/train_metrics.npy").tolist()
             self.Metrics.epochs_val_metrics = np.load(resume_path + "/val_metrics.npy").tolist()
         
-        self.most_recent_manager = tf.train.CheckpointManager(self.checkpoint, save_train_path + "/most_recent" , max_to_keep=1)
-        self.best_RP_manager = tf.train.CheckpointManager(self.checkpoint, save_train_path + "/best_RP" , max_to_keep=1)
+        self.most_recent_manager = tf.train.CheckpointManager(self.checkpoint, save_train_path + "/most_recent" , max_to_keep=15)
+        self.best_RP_manager = tf.train.CheckpointManager(self.checkpoint, save_train_path + "/best_RP" , max_to_keep=15)
         curr_epoch = self.checkpoint.curr_epoch.numpy()
         best_val_rp = self.checkpoint.best_val_rp.numpy()
         
