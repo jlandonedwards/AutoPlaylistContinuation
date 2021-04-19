@@ -14,6 +14,31 @@ from Metrics import Metrics
 import time
 import json
 import csv
+import tensorflow_addons as tfa
+
+
+# class MultiHeadAttention(tf.keras.layers.Layer):
+#     def __init__(self,head_size,num_heads):
+#         super(MultiHeadAttention, self).__init__()
+#         self.ff1 = keras.layers.Dense(units=head_size*num_heads,activation=tfa.activations.mish)
+#         self.ff2 = keras.layers.Dense(units=head_size*num_heads,activation=tfa.activations.mish)
+#         self.mha = tfa.layers.MultiHeadAttention(head_size, num_heads)
+        
+#     def call(self,query,key):
+#         key = self.ff1(key)
+#         query = self.ff2(query)
+#         return self.mha([query,key])
+
+
+import tensorflow as tf
+import numpy as np
+import math
+from tensorflow import keras
+from tensorflow.keras import backend as K
+from Metrics import Metrics
+import time
+import json
+import csv
 
 class Embedding(tf.keras.layers.Layer):
     def __init__(self,n_ids,embedding_dim=32):
@@ -39,7 +64,7 @@ class CharacterCNN(tf.keras.layers.Layer):
         super(CharacterCNN, self).__init__()
         self.n_ids = n_ids
         self.emb = Embedding(n_cids,embedding_dim)
-        self.ff1 = keras.layers.Dense(512,activation='relu')
+        self.ff1 = keras.layers.Dense(1014,activation='relu')
         self.conv1 = tf.keras.layers.Conv1D(256, 7, activation='relu')
         self.maxpool1 = tf.keras.layers.MaxPooling1D(pool_size=3)
         self.conv2 = tf.keras.layers.Conv1D(256, 7, activation='relu')
@@ -50,38 +75,40 @@ class CharacterCNN(tf.keras.layers.Layer):
         self.conv6 = tf.keras.layers.Conv1D(256, 3, activation='relu')
         self.maxpool3 = tf.keras.layers.MaxPooling1D(pool_size=3)
         self.flatten = tf.keras.layers.Flatten()
-        self.ff2 = keras.layers.Dense(512,activation='relu')
+        self.ff2 = keras.layers.Dense(1024,activation='relu')
         self.dropout1 = keras.layers.Dropout(0.5)
         self.ff3 = keras.layers.Dense(1024,activation='relu')
         self.dropout2 = keras.layers.Dropout(0.5)
         self.ff4 = keras.layers.Dense(32,activation='relu')
-    
+        self.bn1 = keras.layers.BatchNormalization()
+        self.bn2 = keras.layers.BatchNormalization()
+        self.bn3 = keras.layers.BatchNormalization()
+        self.bn4 = keras.layers.BatchNormalization()
+        
     def call(self, ids,training=False):
-       # print("ids")
-       # print(ids)
-       # print(ids.shape)
-       x = self.emb(ids)
-       # print("x")
-       # print(x)       
+       x = self.emb(ids) 
        x = self.ff1(x)
        x = tf.reshape(x, (x.shape[0], x.shape[1], 1))
        x = self.conv1(x)
        x = self.maxpool1(x)
        x = self.conv2(x)
        x = self.maxpool2(x)
+       x= self.bn1(x)
        x = self.conv3(x)
        x = self.conv4(x)
+       x= self.bn2(x)
        x = self.conv5(x)
        x = self.conv6(x)
        x = self.maxpool3(x)
        x = self.flatten(x)
+       x= self.bn3(x)
        x = self.ff2(x)
        x = self.dropout1(x)
        x = self.ff3(x)
        x = self.dropout2(x)
        x = self.ff4(x)
-       y_pred = keras.activations.softmax(x,axis=1)
-       return y_pred
+       x = self.bn4(x)
+       return x
             
         
    
@@ -94,12 +121,14 @@ class DAE(tf.keras.layers.Layer):
         self.b1 = tf.Variable(tf.random.normal(shape=[n_ids],dtype=tf.float32),trainable=True)
         self.emb = Embedding(n_ids,embedding_dim)
         self.ff1 = keras.layers.Dense(32,activation='relu')
+        self.bn = keras.layers.BatchNormalization()
     
     def call(self, ids,training=False):
        x = self.emb(ids) + self.b0
        x = keras.activations.relu(x)
        x = x @ K.transpose(self.emb.w) + self.b1
-       y_pred = self.ff1(x )
+       y_pred = self.ff1(x)
+       y_pred = self.bn(y_pred)
        #y_pred = keras.activations.softmax(x,axis=1)
        #y_pred = keras.activations.sigmoid(x)
        return y_pred
@@ -126,11 +155,18 @@ class Model(tf.keras.Model):
         return y_pred
     
     
-    def Loss(self,y_tracks,y_artists,y_pred):
-        y_true = tf.cast(tf.concat([y_tracks,y_artists],1),tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_ids))
-        l = tf.reduce_mean(-tf.reduce_sum(y_true*tf.math.log(y_pred+1e-10) + .55*(1-y_true)*tf.math.log(1 -y_pred+1e-10),axis=1),axis=0)
+    def loss(self,y_tracks,y_artists,y_pred):
+        y_pred_tracks = y_pred[:,0:self.n_track_ids]
+        y_pred_artists = y_pred[:,self.n_track_ids:]
+        y_tracks = tf.cast(y_tracks,tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_track_ids))
+        y_artists = tf.cast(y_artists,tf.float32).to_tensor(default_value=0,shape=(y_tracks.shape[0],self.n_ids-self.n_track_ids))
+        l = self.cross_entropy(y_tracks,y_pred_tracks) + .5* self.cross_entropy(y_artists,y_pred_artists)
         reg = tf.linalg.norm(tf.concat([tf.reshape(w,[-1]) for w in self.trainable_weights],0))
-        return l + 0.01*reg
+        
+        return l + 0.01* reg
+    
+    def cross_entropy(self,y_true,y_pred):
+         return tf.reduce_mean(-tf.reduce_sum(y_true*tf.math.log(y_pred+1e-10) + .55*(1-y_true)*tf.math.log(1 -y_pred+1e-10),axis=1),axis=0)
         
     def get_reccomendations(self,x_tracks,y_pred):
         cand_ids = self._zero_by_ids(y_pred,x_tracks)
@@ -158,7 +194,7 @@ class Model(tf.keras.Model):
         with tf.GradientTape() as tape:
             y_pred = self(tf.concat([x_tracks,x_artists],axis=1),x_titles,training=True)  # Forward pass
             # Compute our own loss
-            loss = self.Loss(y_tracks,y_artists,y_pred)
+            loss = self.loss(y_tracks,y_artists,y_pred)
             # Compute gradients
             trainable_vars = self.trainable_variables
             gradients = tape.gradient(loss, trainable_vars)
@@ -171,7 +207,7 @@ class Model(tf.keras.Model):
     def val_step(self,data):
         x_tracks,x_artists,x_titles,y_tracks,y_artists = data
         y_pred = self(tf.concat([x_tracks,x_artists],axis=1),x_titles, training=False)
-        loss = self.Loss(y_tracks,y_artists,y_pred)
+        loss = self.loss(y_tracks,y_artists,y_pred)
         rec_tracks,rec_artists = self.get_reccomendations(x_tracks,y_pred)
         r_precision,ndcg,rec_clicks = self.Metrics.calculate_metrics(rec_tracks,rec_artists,y_tracks,y_artists)
         return loss,r_precision,ndcg,rec_clicks
