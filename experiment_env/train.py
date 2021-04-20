@@ -30,7 +30,7 @@ if __name__=='__main__':
     args.add_argument('--load_dir', type=str, default='./trained_models/final_sub/post_train', help="directory where to save model checkpoints")
     args.add_argument('--resume_dir', type=str, default='./trained_models/final_sub/resume/best_RP', help="directory where to save model checkpoints to resumed to in training")
     args.add_argument('--model_name', type=str, default='final_sub', help="Unique Name to Save Model")
-    args.add_argument('--mode', type=str, default='train', help="whether to train,resume training, or load model and start new training session")
+    args.add_argument('--mode', type=str, default='resume', help="whether to train,resume training, or load model and start new training session")
     args = args.parse_args()
     
     if args.mode not in ["train","resume","load"]:
@@ -44,7 +44,7 @@ if __name__=='__main__':
     resume_path=""
     # All the hyperparamters that will be passed in by config object
     n_epochs = 30
-    train_batch_size = 64
+    train_batch_size = 128
     val_batch_size = 100
     n_val_batches = 1000 // val_batch_size
     with open("./utils/data_properties") as file:
@@ -57,7 +57,7 @@ if __name__=='__main__':
     training_set = dataset.get_traing_set(train_batch_size,2020)
     n_train_batches = len(training_set)
     validation_sets = dataset.get_validation_sets(val_batch_size)
-    opt = keras.optimizers.Adam(learning_rate=0.0005)
+    opt = keras.optimizers.Adam(learning_rate=0.005)
     model = Model(n_ids,n_track_ids,n_cids)
     model.optimizer = opt
     save_train_path =  args.models_dir +"/" + args.model_name +"/" +"resume/"
