@@ -71,14 +71,22 @@ class Metrics():
         
         n_correct_tracks = tf.cast(tf.sets.size(correct_tracks),tf.float32)
         n_correct_artists = tf.cast(tf.sets.size(correct_artists),tf.float32)
-        n_total_targets = tf.cast(tf.sets.size(y_tracks.to_sparse()) + tf.sets.size(y_artists.to_sparse()),tf.float32)
+        n_total_targets = tf.cast(tf.sets.size(y_tracks.to_sparse()),tf.float32)
         return tf.math.reduce_mean((n_correct_tracks + .25*n_correct_artists)/n_total_targets)
         
     
     def NDCG(self,idxs_3d,nrows):
-        dcg = 1/tf.math.reduce_sum(tf.experimental.numpy.log2(tf.cast(tf.RaggedTensor.from_value_rowids(idxs_3d[:,2],idxs_3d[:,0],nrows=nrows),tf.float32).to_tensor(0)+2),1)
-        idcg = 1/tf.math.reduce_sum(tf.experimental.numpy.log2(tf.cast(tf.RaggedTensor.from_value_rowids(idxs_3d[:,1],idxs_3d[:,0],nrows=nrows),tf.float32).to_tensor(0)+2),1)
-        return tf.math.reduce_mean(dcg/idcg)
+        log2 = tf.math.log(2.0)
+        obs_pos = tf.cast(tf.RaggedTensor.from_value_rowids(idxs_3d[:,2],idxs_3d[:,0],nrows=nrows),tf.float32)
+        log2_pos =  tf.math.log(obs_pos + 2) / log2
+        dcg_inv = tf.math.reduce_sum(log2_pos,1)
+        best_pos = tf.cast(tf.RaggedTensor.from_value_rowids(idxs_3d[:,1],idxs_3d[:,0],nrows=nrows),tf.float32)
+        log2_best_pos = tf.math.log(best_pos + 2) / log2
+        idcg_inv = tf.math.reduce_sum(log2_best_pos,1)
+        mask = tf.not_equal(dcg_inv,0)
+        dcg_inv = tf.boolean_mask(dcg_inv,mask)
+        idcg_inv =  tf.boolean_mask(idcg_inv,mask)
+        return tf.math.reduce_mean(idcg_inv/dcg_inv)
     
     
     
