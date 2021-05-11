@@ -20,14 +20,14 @@ GeForce RTX 3090
 
 ## Dataset
 
-Spotify has produced the Million Playlist Dataset . This data can be obtained by signing up for the[ aicrowd competition ](https://www.aicrowd.com/challenges/spotify-million-playlist-dataset-challenge),and download the zips conatined  within the Resources tab.
+Spotify has produced the Million Playlist Dataset . This data can be obtained by signing up for the [aicrowd competition](https://www.aicrowd.com/challenges/spotify-million-playlist-dataset-challenge),and download the zips contained  within the Resources tab.
 
 ## Directory Structure
 
 The scripts read inputs by default based on the following organization of files.
 
-1. Unzip the file spotify_million_playlist_dataset.zip and move all the files located within [] to the folder **data/**
-2. Unzip the the file spotify_million_playlist_dataset_challenge.zip  and move the file located within [] to the folder **challenge_data/**
+1. Unzip the file spotify_million_playlist_dataset.zip and move all the files located within  **spotify_million_playlist_dataset/data/** to the folder **data/**
+2. Unzip the the file spotify_million_playlist_dataset_challenge.zip  and move the file  **spotify_million_playlist_dataset_challenge/challenge_set.json** to the folder **challenge_data/**.
 
 ## Data Preprocessing
 
